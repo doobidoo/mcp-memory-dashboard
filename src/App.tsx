@@ -31,14 +31,15 @@ function App() {
         errors.push("VITE_MEMORY_SERVICE_PATH is not set in .env file");
       }
 
-      // Check if Claude config exists, but don't fail if it doesn't
+      // Claude configuration is optional - we'll only check it when needed
+      updatedConfig.claude.available = false;
       try {
         await window.fs.readFile(updatedConfig.claude.configPath, { 
           encoding: 'utf-8' 
         });
+        updatedConfig.claude.available = true;
       } catch (error) {
-        console.warn(`Claude configuration not found at ${updatedConfig.claude.configPath}`);
-        // Don't add to errors since Claude integration is optional
+        console.info(`Claude integration is optional - configuration not found at ${updatedConfig.claude.configPath}`);
       }
 
       setConfig(updatedConfig);
@@ -100,18 +101,20 @@ function App() {
               </p>
             </div>
 
-            <div>
-              <h3 className="font-medium mb-2">Claude Integration (Optional)</h3>
-              <p className="mb-2">
-                For Claude integration, please ensure Claude Desktop is installed and configured at:
-              </p>
-              <pre className="bg-gray-100 p-4 rounded mb-2">
-                {config.claude.configPath}
-              </pre>
-              <p className="text-sm text-gray-600">
-                Note: The app will work without Claude integration, but some features may be limited.
-              </p>
-            </div>
+            {!config.claude.available && (
+              <div>
+                <h3 className="font-medium mb-2">Claude Integration (Optional)</h3>
+                <p className="mb-2">
+                  For Claude integration, please ensure Claude Desktop is installed and configured at:
+                </p>
+                <pre className="bg-gray-100 p-4 rounded mb-2">
+                  {config.claude.configPath}
+                </pre>
+                <p className="text-sm text-gray-600">
+                  Note: The app will work without Claude integration, but some features may be limited.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ export interface MCPConfig {
   };
   claude: {
     configPath: string;
+    available?: boolean;
   };
 }
 
