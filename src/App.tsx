@@ -31,15 +31,21 @@ function App() {
         errors.push("VITE_MEMORY_SERVICE_PATH is not set in .env file");
       }
 
-      // Claude configuration is optional - we'll only check it when needed
+      // Verify Claude configuration
       updatedConfig.claude.available = false;
       try {
-        await window.fs.readFile(updatedConfig.claude.configPath, { 
-          encoding: 'utf-8' 
+        const configContent = await window.fs.readFile(updatedConfig.claude.configPath, {
+          encoding: 'utf-8'
         });
+        // Verify it's valid JSON
+        JSON.parse(configContent);
         updatedConfig.claude.available = true;
       } catch (error) {
-        console.info(`Claude integration is optional - configuration not found at ${updatedConfig.claude.configPath}`);
+        if (error instanceof SyntaxError) {
+          console.error(`Invalid Claude configuration at ${updatedConfig.claude.configPath}:`, error);
+        } else {
+          console.info(`Claude integration is optional - configuration not found at ${updatedConfig.claude.configPath}`);
+        }
       }
 
       setConfig(updatedConfig);
@@ -105,7 +111,7 @@ function App() {
               <div>
                 <h3 className="font-medium mb-2">Claude Integration (Optional)</h3>
                 <p className="mb-2">
-                  For Claude integration, please ensure Claude Desktop is installed and configured at:
+                  Claude Desktop configuration found at:
                 </p>
                 <pre className="bg-gray-100 p-4 rounded mb-2">
                   {config.claude.configPath}
