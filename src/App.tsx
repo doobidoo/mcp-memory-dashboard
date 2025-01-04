@@ -1,4 +1,4 @@
-import MemoryDashboard from './MemoryDashboard';
+import MemoryDashboard from '@/MemoryDashboard';
 
 function App() {
   return (
