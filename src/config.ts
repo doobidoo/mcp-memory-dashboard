@@ -13,7 +13,7 @@ export const defaultConfig: MCPConfig = {
       command: "uv",
       args: [
         "--directory",
-        process.env.VITE_MEMORY_SERVICE_PATH || "/path/to/mcp-memory-service",
+        import.meta.env.VITE_MEMORY_SERVICE_PATH || "/path/to/mcp-memory-service",
         "run",
         "memory-service"
       ]
