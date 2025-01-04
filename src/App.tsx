@@ -1,35 +1,59 @@
 import MemoryDashboard from '@/MemoryDashboard';
 import { defaultConfig } from './config';
 
-async function App() {
-  // Check if configuration is valid
-  const config = {
-    ...defaultConfig,
-    mcpServers: {
-      memory: {
-        ...defaultConfig.mcpServers.memory,
-        args: [
-          "--directory",
-          import.meta.env.VITE_MEMORY_SERVICE_PATH || "/path/to/mcp-memory-service",
-          "run",
-          "memory-service"
-        ]
+import { useEffect, useState } from 'react';
+
+function App() {
+  const [configErrors, setConfigErrors] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [config, setConfig] = useState(defaultConfig);
+
+  useEffect(() => {
+    const initializeApp = async () => {
+      const errors = [];
+      const updatedConfig = {
+        ...defaultConfig,
+        mcpServers: {
+          memory: {
+            ...defaultConfig.mcpServers.memory,
+            args: [
+              "--directory",
+              import.meta.env.VITE_MEMORY_SERVICE_PATH || "/path/to/mcp-memory-service",
+              "run",
+              "memory-service"
+            ]
+          }
+        }
+      };
+
+      if (!import.meta.env.VITE_MEMORY_SERVICE_PATH) {
+        errors.push("VITE_MEMORY_SERVICE_PATH is not set in .env file");
       }
-    }
-  };
 
-  // Check for required configurations
-  const configErrors = [];
-  
-  if (!import.meta.env.VITE_MEMORY_SERVICE_PATH) {
-    configErrors.push("VITE_MEMORY_SERVICE_PATH is not set in .env file");
-  }
+      try {
+        await window.fs.readFile(updatedConfig.claude.configPath, { 
+          encoding: 'utf-8' 
+        });
+      } catch (error) {
+        errors.push(`Claude configuration not found at ${updatedConfig.claude.configPath}`);
+      }
 
-  try {
-    // Try to access Claude config file
-    await window.fs.readFile(config.claude.configPath, { encoding: 'utf-8' });
-  } catch (error) {
-    configErrors.push(`Claude configuration not found at ${config.claude.configPath}`);
+      setConfig(updatedConfig);
+      setConfigErrors(errors);
+      setIsLoading(false);
+    };
+
+    initializeApp();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow">
+          <h1 className="text-2xl font-bold mb-4">Loading...</h1>
+        </div>
+      </div>
+    );
   }
 
   if (configErrors.length > 0) {
