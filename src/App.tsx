@@ -3,6 +3,21 @@ import { defaultConfig } from './config';
 
 function App() {
   // Check if configuration is valid
+  const config = {
+    ...defaultConfig,
+    mcpServers: {
+      memory: {
+        ...defaultConfig.mcpServers.memory,
+        args: [
+          "--directory",
+          import.meta.env.VITE_MEMORY_SERVICE_PATH || "/path/to/mcp-memory-service",
+          "run",
+          "memory-service"
+        ]
+      }
+    }
+  };
+
   if (!import.meta.env.VITE_MEMORY_SERVICE_PATH) {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
@@ -17,6 +32,9 @@ function App() {
           <p className="mb-4">
             Current value: {import.meta.env.VITE_MEMORY_SERVICE_PATH || 'Not set'}
           </p>
+          <p className="text-sm text-gray-600">
+            Current config: {JSON.stringify(config, null, 2)}
+          </p>
         </div>
       </div>
     );
@@ -24,7 +42,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <MemoryDashboard config={defaultConfig} />
+      <MemoryDashboard config={config} />
     </div>
   );
 }
