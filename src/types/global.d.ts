@@ -2,6 +2,7 @@ declare global {
   interface Window {
     fs: {
       readFile: (path: string, options: { encoding: string }) => Promise<string>;
+      exists: (path: string) => Promise<boolean>;
     };
     check_database_health: () => Promise<{
       health: number;

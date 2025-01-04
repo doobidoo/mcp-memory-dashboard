@@ -34,17 +34,23 @@ function App() {
       // Verify Claude configuration
       updatedConfig.claude.available = false;
       try {
-        const configContent = await window.fs.readFile(updatedConfig.claude.configPath, {
-          encoding: 'utf-8'
-        });
-        // Verify it's valid JSON
-        JSON.parse(configContent);
-        updatedConfig.claude.available = true;
+        const fileExists = await window.fs.exists(updatedConfig.claude.configPath);
+        if (fileExists) {
+          const configContent = await window.fs.readFile(updatedConfig.claude.configPath, {
+            encoding: 'utf-8'
+          });
+          // Verify it's valid JSON
+          JSON.parse(configContent);
+          updatedConfig.claude.available = true;
+          console.info(`Claude configuration successfully loaded from ${updatedConfig.claude.configPath}`);
+        } else {
+          console.info(`Claude integration is optional - configuration not found at ${updatedConfig.claude.configPath}`);
+        }
       } catch (error) {
         if (error instanceof SyntaxError) {
           console.error(`Invalid Claude configuration at ${updatedConfig.claude.configPath}:`, error);
         } else {
-          console.info(`Claude integration is optional - configuration not found at ${updatedConfig.claude.configPath}`);
+          console.error(`Error checking Claude configuration:`, error);
         }
       }
 
@@ -111,13 +117,13 @@ function App() {
               <div>
                 <h3 className="font-medium mb-2">Claude Integration (Optional)</h3>
                 <p className="mb-2">
-                  Claude Desktop configuration found at:
+                  Claude Desktop configuration path:
                 </p>
                 <pre className="bg-gray-100 p-4 rounded mb-2">
                   {config.claude.configPath}
                 </pre>
                 <p className="text-sm text-gray-600">
-                  Note: The app will work without Claude integration, but some features may be limited.
+                  Note: Claude integration is optional. The app will work without it, but some features may be limited.
                 </p>
               </div>
             )}
