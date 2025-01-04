@@ -1,3 +1,4 @@
+import * as React from 'react';
 import MemoryDashboard from '@/MemoryDashboard';
 import { defaultConfig } from './config';
 import { useEffect, useState } from 'react';
