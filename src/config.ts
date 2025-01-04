@@ -5,6 +5,9 @@ export interface MCPConfig {
       args: string[];
     };
   };
+  claude: {
+    configPath: string;
+  };
 }
 
 export const defaultConfig: MCPConfig = {
@@ -18,5 +21,8 @@ export const defaultConfig: MCPConfig = {
         "memory-service"
       ]
     }
+  },
+  claude: {
+    configPath: "/Users/hkr/Library/Application Support/Claude/claude_desktop_config.json"
   }
 };
