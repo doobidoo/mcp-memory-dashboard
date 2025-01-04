@@ -1,7 +1,7 @@
 import MemoryDashboard from '@/MemoryDashboard';
 import { defaultConfig } from './config';
-
 import { useEffect, useState } from 'react';
+import { Alert, AlertDescription } from './components/ui/alert';
 
 function App() {
   const [configErrors, setConfigErrors] = useState<string[]>([]);
@@ -56,6 +56,19 @@ function App() {
     );
   }
 
+  const ErrorFallback = ({ error }: { error: Error }) => (
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="max-w-2xl mx-auto">
+        <Alert variant="destructive">
+          <AlertDescription>
+            <p className="font-medium">Something went wrong:</p>
+            <p>{error.message}</p>
+          </AlertDescription>
+        </Alert>
+      </div>
+    </div>
+  );
+
   if (configErrors.length > 0) {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
@@ -99,9 +112,40 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <MemoryDashboard config={config} />
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <MemoryDashboard config={config} />
+      </ErrorBoundary>
     </div>
   );
+}
+
+class ErrorBoundary extends React.Component<
+  { 
+    children: React.ReactNode;
+    FallbackComponent: React.ComponentType<{ error: Error }> 
+  },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { 
+    children: React.ReactNode;
+    FallbackComponent: React.ComponentType<{ error: Error }> 
+  }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError && this.state.error) {
+      const { FallbackComponent } = this.props;
+      return <FallbackComponent error={this.state.error} />;
+    }
+
+    return this.props.children;
+  }
 }
 
 export default App;
