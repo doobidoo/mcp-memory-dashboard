@@ -30,12 +30,14 @@ function App() {
         errors.push("VITE_MEMORY_SERVICE_PATH is not set in .env file");
       }
 
+      // Check if Claude config exists, but don't fail if it doesn't
       try {
         await window.fs.readFile(updatedConfig.claude.configPath, { 
           encoding: 'utf-8' 
         });
       } catch (error) {
-        errors.push(`Claude configuration not found at ${updatedConfig.claude.configPath}`);
+        console.warn(`Claude configuration not found at ${updatedConfig.claude.configPath}`);
+        // Don't add to errors since Claude integration is optional
       }
 
       setConfig(updatedConfig);
@@ -75,11 +77,13 @@ function App() {
         <div className="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow">
           <h1 className="text-2xl font-bold mb-4">Configuration Required</h1>
           <h2 className="text-xl font-semibold mb-4">Configuration Errors</h2>
-          <ul className="list-disc list-inside mb-4">
-            {configErrors.map((error, index) => (
-              <li key={index} className="text-red-600 mb-2">{error}</li>
-            ))}
-          </ul>
+          {configErrors.length > 0 && (
+            <ul className="list-disc list-inside mb-4">
+              {configErrors.map((error, index) => (
+                <li key={index} className="text-red-600 mb-2">{error}</li>
+              ))}
+            </ul>
+          )}
           
           <div className="space-y-4">
             <div>
@@ -96,13 +100,16 @@ function App() {
             </div>
 
             <div>
-              <h3 className="font-medium mb-2">Claude Configuration</h3>
-              <p>
-                Please ensure Claude Desktop is installed and configured at:
+              <h3 className="font-medium mb-2">Claude Integration (Optional)</h3>
+              <p className="mb-2">
+                For Claude integration, please ensure Claude Desktop is installed and configured at:
               </p>
-              <pre className="bg-gray-100 p-4 rounded mt-2">
+              <pre className="bg-gray-100 p-4 rounded mb-2">
                 {config.claude.configPath}
               </pre>
+              <p className="text-sm text-gray-600">
+                Note: The app will work without Claude integration, but some features may be limited.
+              </p>
             </div>
           </div>
         </div>
