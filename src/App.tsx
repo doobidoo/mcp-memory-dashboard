@@ -1,8 +1,11 @@
+/// <reference types="vite/client" />
+
 import * as React from 'react';
-import MemoryDashboard from '@/MemoryDashboard';
+import MemoryDashboard from "./MemoryDashboard";
 import { defaultConfig } from './config';
 import { useEffect, useState } from 'react';
 import { Alert, AlertDescription } from './components/ui/alert';
+
 
 function App() {
   const [configErrors, setConfigErrors] = useState<string[]>([]);
@@ -136,7 +139,13 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <ErrorBoundary FallbackComponent={ErrorFallback}>
-        <MemoryDashboard config={config} />
+        <MemoryDashboard 
+          mcpServers={config.mcpServers} 
+          claude={{
+            configPath: config.claude.configPath,
+            available: config.claude.available ?? false
+          }} 
+        />
       </ErrorBoundary>
     </div>
   );

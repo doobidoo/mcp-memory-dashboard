@@ -1,5 +1,10 @@
-import { cn } from "@/lib/utils";
+import { cn } from "src/lib/utils.ts";
 import * as React from "react";
+
+interface AlertProps {
+  variant: "default" | "destructive";
+  children: React.ReactNode;
+}
 
 const Alert = React.forwardRef<
   HTMLDivElement,
@@ -30,3 +35,5 @@ const AlertDescription = React.forwardRef<
 AlertDescription.displayName = "AlertDescription";
 
 export { Alert, AlertDescription };
+
+

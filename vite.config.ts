@@ -1,18 +1,25 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import EnvironmentPlugin from 'vite-plugin-environment';
+import path from 'path';
 
 export default defineConfig({
-  plugins: [
-    react(),
-    EnvironmentPlugin('all', { prefix: 'VITE_' })
-  ],
+  plugins: [react()],
   resolve: {
     alias: {
-      '@': '/src'
+      '@': path.resolve(__dirname, './src')
     }
   },
-  define: {
-    'process.env': process.env
+  base: process.env.ELECTRON=="true" ? './' : ".",
+  build: {
+    outDir: 'dist',
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'electron/main.ts'),
+        preload: path.resolve(__dirname, 'electron/preload.ts')
+      }
+    }
+  },
+  server: {
+    port: 5175
   }
 });
