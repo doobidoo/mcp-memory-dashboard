@@ -11,7 +11,7 @@
     "build": "npm run build:vite && npm run build:electron && npm run copy-preload",
     "copy-preload": "cp dist/electron/preload.js dist/",
     "preview": "vite preview",
-    "electron:dev": "cross-env NODE_ENV=development concurrently -k \"BROWSER=none npm run dev\" \"wait-on tcp:5173 && npm run build:electron && electronmon .\"",
+    "electron:dev": "cross-env NODE_ENV=development concurrently -k \"BROWSER=none npm run dev\" \"wait-on tcp:5173 && npm run build:electron && electron .\"",
     "electron:build": "electron-builder",
     "electron:preview": "cross-env NODE_ENV=production electron ."
   },
