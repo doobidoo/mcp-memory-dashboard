@@ -2,21 +2,28 @@
   "compilerOptions": {
     "composite": true,
     "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
     "skipLibCheck": true,
-    "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": false,
-    "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["electron", "node"]
+    "types": ["electron", "node"],
+    "outDir": "./dist/electron",
+    "rootDir": ".",
+    "allowJs": true,
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": [
+    "electron/**/*",
+    "src/types/**/*",
+    "src/services/**/*",
+    "src/config.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
 }

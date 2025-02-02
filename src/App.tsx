@@ -1,11 +1,8 @@
-/// <reference types="vite/client" />
-
 import * as React from 'react';
 import MemoryDashboard from "./MemoryDashboard";
 import { defaultConfig } from './config';
 import { useEffect, useState } from 'react';
 import { Alert, AlertDescription } from './components/ui/alert';
-
 
 function App() {
   const [configErrors, setConfigErrors] = useState<string[]>([]);
@@ -14,7 +11,8 @@ function App() {
 
   useEffect(() => {
     const initializeApp = async () => {
-      const errors = [];
+      console.log('Initializing app...');
+      const errors: string[] = [];
       const updatedConfig = {
         ...defaultConfig,
         mcpServers: {
@@ -31,12 +29,20 @@ function App() {
       };
 
       if (!import.meta.env.VITE_MEMORY_SERVICE_PATH) {
+        console.error('VITE_MEMORY_SERVICE_PATH not set in environment');
         errors.push("VITE_MEMORY_SERVICE_PATH is not set in .env file");
+      } else {
+        console.log('Using memory service path:', import.meta.env.VITE_MEMORY_SERVICE_PATH);
       }
 
       // Verify Claude configuration
       updatedConfig.claude.available = false;
       try {
+        console.log('Checking Claude configuration at:', updatedConfig.claude.configPath);
+        if (!window.fs) {
+          throw new Error('File system API not available');
+        }
+
         const fileExists = await window.fs.exists(updatedConfig.claude.configPath);
         if (fileExists) {
           const configContent = await window.fs.readFile(updatedConfig.claude.configPath, {
@@ -57,6 +63,7 @@ function App() {
         }
       }
 
+      console.log('Setting updated config:', updatedConfig);
       setConfig(updatedConfig);
       setConfigErrors(errors);
       setIsLoading(false);
@@ -78,7 +85,7 @@ function App() {
   const ErrorFallback = ({ error }: { error: Error }) => (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-2xl mx-auto">
-        <Alert variant="destructive">
+        <Alert>
           <AlertDescription>
             <p className="font-medium">Something went wrong:</p>
             <p>{error.message}</p>

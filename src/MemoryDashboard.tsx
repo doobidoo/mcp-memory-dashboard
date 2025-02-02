@@ -1,18 +1,17 @@
-interface Memory {
-  content: string;
-  tags?: string[];
-  similarity?: number;
-}
-
-//import path from 'path';
 import React, { useState, useEffect } from 'react';
+import { 
+  DatabaseHealth, 
+  DatabaseStats, 
+  MemoryResponse, 
+  Memory,
+  MemoryAPI,
+  MemoryMetadata 
+} from './types';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/card';
-import { Alert, AlertDescription } from './components/ui/alert';
 import { 
   Save, Search, Tag, Database, Settings, 
   RefreshCw, Trash2 
 } from 'lucide-react';
-
 
 interface MemoryDashboardProps {
   mcpServers: {
@@ -32,11 +31,7 @@ interface MemoryDashboardProps {
   };
 }
 
-const MemoryDashboard = ({  }: MemoryDashboardProps) => {
-
-  const [configLoading, setConfigLoading] = useState(true);
-  const [configError, setConfigError] = useState<string | null>(null);
-  const [config, setConfig] = useState(null);
+const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,90 +45,33 @@ const MemoryDashboard = ({  }: MemoryDashboardProps) => {
     dbHealth: 100,
     avgQueryTime: 0
   });
-
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        const configPath = import.meta.env.VITE_CLAUDE_CONFIG_PATH || 
-                          "/Users/hkr/Library/Application Support/Claude/claude_desktop_config.json";
-        
-        console.log('Debug info:', {
-          configPath,
-          fsAvailable: !!window.fs,
-          fsMethods: window.fs ? Object.keys(window.fs) : [],
-          envVars: import.meta.env
-        });
-
-        // First check if file exists
-        if (window.fs.exists) {
-          const exists = await window.fs.exists(configPath);
-          if (!exists) {
-            throw new Error(`Config file does not exist at path: ${configPath}`);
-          }
-          console.log('Config file exists:', exists);
-        }
-
-        // Try to read the file
-        const configContent = await window.fs.readFile(configPath, { encoding: 'utf8' });
-        console.log('Raw config content:', configContent);
-
-        // Try to parse the content
-        const configData = JSON.parse(configContent);
-        console.log('Parsed config:', configData);
-
-        if (!configData || !configData.mcpServers?.memory) {
-          throw new Error('Memory service configuration not found in config');
-        }
-
-        setConfig(configData.mcpServers.memory);
-        setConfigError(null);
-        await loadStats();
-      } catch (err) {
-        console.error('Full error details:', {
-          error: err,
-          message: err.message,
-          stack: err.stack
-        });
-        setConfigError(`Configuration error: ${(err as Error).message}`);
-      } finally {
-        setConfigLoading(false);
-      }
-    };
-
-    loadConfig();
+    loadStats();
   }, []);
-
-  const callMCPTool = async (toolName: string, params = {}) => {
-    if (!config) throw new Error('Configuration not loaded');
-    try {
-      const result = await window[toolName](params);
-      return result;
-    } catch (error: unknown) {  // Type the error as unknown
-      const err = error as Error;  // Type assertion
-      console.error(`Error calling ${toolName}:`, err);
-      throw err;
-    }
-  };
 
   const loadStats = async () => {
     try {
+      if (!window.electronAPI?.memory) {
+        throw new Error('Memory API not available');
+      }
+
       const [healthData, dbStats] = await Promise.all([
-        callMCPTool('check_database_health'),
-        callMCPTool('get_stats')
+        window.electronAPI.memory.check_database_health(),
+        window.electronAPI.memory.get_stats()
       ]);
       
       setStats({
-        totalMemories: dbStats?.totalMemories || 0,
-        tagsCount: dbStats?.uniqueTags || 0,
-        dbHealth: healthData?.health || 100,
-        avgQueryTime: healthData?.avgQueryTime || 0
+        totalMemories: dbStats.total_memories || 0,
+        tagsCount: dbStats.unique_tags || 0,
+        dbHealth: healthData.health || 100,
+        avgQueryTime: healthData.avg_query_time || 0
       });
     } catch (err) {
       setError('Failed to load statistics');
     }
   };
-
 
   const handleStoreMemory = async () => {
     if (!content.trim()) {
@@ -143,24 +81,25 @@ const MemoryDashboard = ({  }: MemoryDashboardProps) => {
 
     setLoading(true);
     try {
+      if (!window.electronAPI?.memory) {
+        throw new Error('Memory API not available');
+      }
+
       const tagArray = tags.split(',').map(tag => tag.trim()).filter(Boolean);
-      const result = await callMCPTool('store_memory', {
-        content: content.trim(),
-        metadata: {
-          tags: tagArray,
-          type: 'user-input'
-        }
+      await window.electronAPI.memory.store_memory(content.trim(), {
+        tags: tagArray,
+        type: 'user-input'
       });
 
-      if (result) {
-        setContent('');
-        setTags('');
-        setError(null);
-        await loadStats();
-      }
-    } catch (error: unknown) {  // Type the error
-      const err = error as Error;
+      setContent('');
+      setTags('');
+      setError(null);
+      await loadStats();
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
       setError('Failed to store memory: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -172,15 +111,16 @@ const MemoryDashboard = ({  }: MemoryDashboardProps) => {
 
     setLoading(true);
     try {
-      const results = await callMCPTool('retrieve_memory', {
-        query: searchQuery.trim(),
-        n_results: 5
-      });
+      if (!window.electronAPI?.memory) {
+        throw new Error('Memory API not available');
+      }
 
-      setMemories(results);
+      const response = await window.electronAPI.memory.retrieve_memory(searchQuery.trim(), 5);
+      setMemories(response.memories || []);
       setError(null);
-    } catch (err: unknown) {  // Add ': unknown' here
-      setError('Search failed: ' + (err as Error).message);  // Add '(err as Error)' here
+    } catch (searchError) {
+      const err = searchError instanceof Error ? searchError : new Error(String(searchError));
+      setError('Search failed: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -189,22 +129,33 @@ const MemoryDashboard = ({  }: MemoryDashboardProps) => {
   const handleOptimize = async () => {
     setLoading(true);
     try {
-      await callMCPTool('optimize_db');
+      if (!window.electronAPI?.memory) {
+        throw new Error('Memory API not available');
+      }
+
+      await window.electronAPI.memory.optimize_db();
       await loadStats();
       setError(null);
     } catch (err) {
-      setError('Failed to optimize database: ' + (err as Error).message);
+      setError('Failed to optimize database performance: ' + (err as Error).message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleBackup = async () => {
+    setLoading(true);
     try {
-      await callMCPTool('create_backup');
+      if (!window.electronAPI?.memory) {
+        throw new Error('Memory API not available');
+      }
+
+      await window.electronAPI.memory.create_backup();
       setError(null);
     } catch (err) {
       setError('Failed to create backup: ' + (err as Error).message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -216,63 +167,20 @@ const MemoryDashboard = ({  }: MemoryDashboardProps) => {
 
     setLoading(true);
     try {
-      await callMCPTool('delete_by_tag', { tag: tag.trim() });
+      if (!window.electronAPI?.memory) {
+        throw new Error('Memory API not available');
+      }
+
+      await window.electronAPI.memory.delete_by_tag(tag.trim());
       await loadStats();
       setError(null);
       setSearchQuery('');
     } catch (err) {
-      setError('Failed to delete tag: ' + (err as Error).message);
+      setError('Failed to delete memories by tag: ' + (err as Error).message);
     } finally {
       setLoading(false);
     }
   };
-
-  if (configLoading) {
-    return (
-      <div className="w-full h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="h-8 w-8 border-t-2 border-b-2 border-blue-500 rounded-full animate-spin" />
-          <p className="mt-4 text-gray-600">Loading configuration...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (configError) {
-    return (
-      <div className="w-full max-w-2xl mx-auto p-4">
-        <Alert variant="default" >
-          <AlertDescription>{configError}</AlertDescription>
-        </Alert>
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Settings className="w-5 h-5" />
-              Configuration Guide
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-4">Required configuration in claude_desktop_config.json:</p>
-            <pre className="bg-gray-50 p-4 rounded-md overflow-x-auto">
-{`{
-  "mcpServers": {
-    "memory": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/mcp-memory-service",
-        "run",
-        "memory-service"
-      ]
-    }
-  }
-}`}
-            </pre>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="w-full max-w-6xl mx-auto p-4">
@@ -325,9 +233,9 @@ const MemoryDashboard = ({  }: MemoryDashboardProps) => {
           </div>
 
           {error && (
-            <Alert variant="default" className="mb-4">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+            <div className="bg-blue-100 p-4 rounded-md mb-4">
+              <p>{error}</p>
+            </div>
           )}
 
           {selectedTab === 'store' && (
@@ -381,25 +289,60 @@ const MemoryDashboard = ({  }: MemoryDashboardProps) => {
                 </button>
               </div>
               <div className="space-y-2">
-                {memories.map((memory, index) => (
-                  <Card key={index}>
-                    <CardContent className="p-4">
-                      <p className="text-gray-800">{memory.content}</p>
-                      <div className="flex gap-2 mt-2">
-                        {memory.tags?.map((tag, tagIndex) => (
-                          <span key={tagIndex} className="px-2 py-1 bg-gray-100 rounded-md text-sm">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                      {memory.similarity && (
-                        <div className="mt-2 text-sm text-gray-500">
-                          Similarity: {(memory.similarity * 100).toFixed(1)}%
+                {memories.map((memory, index) => {
+                  const timestamp = memory.metadata?.timestamp || new Date().toISOString();
+                  const formattedDate = new Date(timestamp).toLocaleString();
+                  
+                  return (
+                    <Card key={index} className="hover:shadow-lg transition-shadow">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="text-sm text-gray-500">
+                            {formattedDate}
+                          </div>
+                          {memory.similarity && (
+                            <div className="text-sm text-gray-500">
+                              Similarity: {(memory.similarity * 100).toFixed(1)}%
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
+                        
+                        <div className="space-y-2">
+                          <div className="text-gray-800">
+                            {memory.content.length > 200 ? (
+                              <>
+                                {expandedIndex === index ? memory.content : `${memory.content.slice(0, 200)}...`}
+                                <button 
+                                  className="text-blue-600 hover:underline ml-2"
+                                  onClick={() => setExpandedIndex(expandedIndex === index ? null : index)}
+                                >
+                                  {expandedIndex === index ? 'Show less' : 'Show more'}
+                                </button>
+                              </>
+                            ) : memory.content}
+                          </div>
+                          
+                          {memory.tags && memory.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {memory.tags.map((tag, tagIndex) => (
+                                <span 
+                                  key={tagIndex}
+                                  className="px-2 py-1 rounded-md text-sm"
+                                  style={{
+                                    backgroundColor: `hsl(${tag.charCodeAt(0) % 360}, 70%, 90%)`,
+                                    color: `hsl(${tag.charCodeAt(0) % 360}, 70%, 30%)`
+                                  }}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -458,6 +401,5 @@ const MemoryDashboard = ({  }: MemoryDashboardProps) => {
     </div>
   );
 };
-
 
 export default MemoryDashboard;

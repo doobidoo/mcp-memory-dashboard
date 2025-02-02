@@ -1,4 +1,4 @@
-import { cn } from "src/lib/utils.ts";
+import { cn } from "../../lib/utils";
 import * as React from "react";
 
 interface AlertProps {
@@ -35,5 +35,3 @@ const AlertDescription = React.forwardRef<
 AlertDescription.displayName = "AlertDescription";
 
 export { Alert, AlertDescription };
-
-
