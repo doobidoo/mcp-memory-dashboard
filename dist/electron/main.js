@@ -1,24 +1,22 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const electron_1 = require("electron");
-const path_1 = __importDefault(require("path"));
+import { app, BrowserWindow } from 'electron';
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 function createWindow() {
-    const win = new electron_1.BrowserWindow({
+    const win = new BrowserWindow({
         width: 800,
         height: 600,
         webPreferences: {
             nodeIntegration: true, // Enable Node integration
             contextIsolation: true,
             sandbox: false, // Disable sandbox
-            preload: path_1.default.join(__dirname, 'preload.js') // Make sure this path is correct
+            preload: path.join(__dirname, 'preload.js') // Using __dirname from ES modules
         }
     });
     // Development
     if (process.env.NODE_ENV === 'development') {
-        win.loadURL('http://localhost:5175'); // Note: using your port 5175
+        win.loadURL('http://localhost:5176'); // Vite dev server port
         // Open DevTools in development
         win.webContents.openDevTools();
     }
@@ -31,16 +29,16 @@ function createWindow() {
         console.log('Window loaded, preload script should be active');
     });
 }
-electron_1.app.whenReady().then(() => {
+app.whenReady().then(() => {
     createWindow();
-    electron_1.app.on('activate', () => {
-        if (electron_1.BrowserWindow.getAllWindows().length === 0) {
+    app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
             createWindow();
         }
     });
 });
-electron_1.app.on('window-all-closed', () => {
+app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
-        electron_1.app.quit();
+        app.quit();
     }
 });

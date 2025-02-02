@@ -1,5 +1,9 @@
 import { app, BrowserWindow } from 'electron'
 import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -9,13 +13,13 @@ function createWindow() {
       nodeIntegration: true, // Enable Node integration
       contextIsolation: true,
       sandbox: false, // Disable sandbox
-      preload: path.join(__dirname, 'preload.js') // Make sure this path is correct
+      preload: path.join(__dirname, 'preload.js') // Using __dirname from ES modules
     }
   })
 
   // Development
   if (process.env.NODE_ENV === 'development') {
-    win.loadURL('http://localhost:5175') // Note: using your port 5175
+    win.loadURL('http://localhost:5176') // Vite dev server port
     // Open DevTools in development
     win.webContents.openDevTools()
   } else {

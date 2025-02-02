@@ -1,15 +1,13 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const electron_1 = require("electron");
-const promises_1 = require("fs/promises");
-const fs_1 = require("fs");
+import { contextBridge } from 'electron';
+import { readFile } from 'fs/promises';
+import { existsSync } from 'fs';
 // Debug that preload is running
 console.log('Preload script starting...');
-electron_1.contextBridge.exposeInMainWorld('fs', {
+contextBridge.exposeInMainWorld('fs', {
     readFile: async (path, options) => {
         console.log('readFile called with path:', path);
         try {
-            const result = await (0, promises_1.readFile)(path, options);
+            const result = await readFile(path, options);
             console.log('readFile successful');
             return result;
         }
@@ -21,7 +19,7 @@ electron_1.contextBridge.exposeInMainWorld('fs', {
     exists: async (path) => {
         console.log('exists called with path:', path);
         try {
-            const exists = (0, fs_1.existsSync)(path);
+            const exists = existsSync(path);
             console.log('exists check result:', exists);
             return exists;
         }
