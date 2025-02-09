@@ -1,7 +1,19 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
-const path = require('path');
-const fs = require('fs');
-const http = require('http');
+import { app, BrowserWindow, ipcMain } from 'electron';
+import path from 'path';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import { createWindow } from './window';
+
+// Load environment variables from .env file
+const envPath = path.join(process.cwd(), '.env');
+console.log('Loading environment variables from:', envPath);
+const result = dotenv.config({ path: envPath });
+
+if (result.error) {
+  console.error('Error loading .env file:', result.error);
+} else {
+  console.log('Environment variables loaded successfully');
+}
 
 // Import types from Electron
 import type { IpcMainInvokeEvent } from 'electron';
@@ -31,176 +43,121 @@ app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-gpu-compositing');
 app.commandLine.appendSwitch('disable-gpu-sandbox');
 
-// Function to wait for file to exist and read its content
-const waitForFile = async (filePath: string, timeout = 10000): Promise<string> => {
-  const startTime = Date.now();
-  console.log(`Waiting for file: ${filePath}`);
-  
-  while (Date.now() - startTime < timeout) {
-    if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      console.log(`File found with content: ${content}`);
-      return content;
-    }
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
-  throw new Error(`Timeout waiting for ${filePath}`);
-};
-
-// Function to check if server is running
-const checkServer = (url: string): Promise<boolean> => {
-  return new Promise((resolve) => {
-    const req = http.get(url, (res: any) => {
-      resolve(res.statusCode === 200);
-      res.resume();
-    });
-
-    req.on('error', () => {
-      resolve(false);
-    });
-
-    req.end();
-  });
-};
-
-function createWindow() {
-  console.log('Creating window...');
-
-  // Get the correct preload script path based on environment
-  const preloadPath = process.env.NODE_ENV === 'development'
-    ? path.join(process.cwd(), 'dist/electron/preload.js')
-    : path.join(__dirname, 'preload.js');
-
-  console.log('Preload script path:', preloadPath);
-
-  const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: preloadPath,
-      webSecurity: true,
-      sandbox: true,
-      webgl: false
-    }
-  });
-
-  // Enhanced error handling
-  win.webContents.on('did-fail-load', (_event: LoadFailEvent, _errorCode: number, errorDescription: string) => {
-    console.error('Failed to load page:', errorDescription);
-    win.reload();
-  });
-
-  // Handle render process crashes
-  win.webContents.on('render-process-gone', (_event: Event, details: ProcessGoneDetails) => {
-    console.error('Render process gone:', details.reason);
-    if (details.reason === 'crashed') {
-      win.destroy();
-      createWindow();
-    }
-  });
-
-  // Handle successful page load
-  win.webContents.on('did-finish-load', () => {
-    console.log('Window finished loading');
-    // Check if the memory service is available
-    win.webContents.executeJavaScript(`
-      try {
-        const memoryServiceAvailable = !!(window.electronAPI && window.electronAPI.memory);
-        console.log('Memory service available:', memoryServiceAvailable);
-        if (!memoryServiceAvailable) {
-          console.error('Memory service not available in renderer process');
-        }
-        return memoryServiceAvailable;
-      } catch (error) {
-        console.error('Error checking memory service:', error);
-        return false;
-      }
-    `)
-    .then((available: boolean) => {
-      if (!available) {
-        console.error('Memory service check failed or service unavailable');
-        win.webContents.send('service-status', { memory: available });
-      }
-    })
-    .catch((error: Error) => {
-      console.error('Failed to check memory service:', error);
-    });
-  });
-
-  // Development
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Running in development mode');
-    const loadDevServer = async () => {
-      try {
-        // Look for port file in project root
-        const portFile = path.join(process.cwd(), '.vite-port');
-        console.log('Looking for port file at:', portFile);
-        
-        const port = await waitForFile(portFile);
-        const url = `http://localhost:${port.trim()}`;
-        console.log('Development server URL:', url);
-        
-        // Test if Vite server is ready
-        const testConnection = async (retries = 5): Promise<boolean> => {
-          while (retries > 0) {
-            try {
-              console.log(`Attempting to connect to ${url} (${retries} retries left)`);
-              const isRunning = await checkServer(url);
-              if (isRunning) {
-                console.log('Successfully connected to development server');
-                return true;
-              }
-            } catch (err) {
-              console.log(`Connection attempt failed:`, err);
-            }
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            retries--;
-          }
-          return false;
-        };
-
-        const connected = await testConnection();
-        if (!connected) {
-          throw new Error('Failed to connect to development server after 5 attempts');
-        }
-
-        console.log('Loading URL in window:', url);
-        await win.loadURL(url);
-        win.webContents.openDevTools();
-      } catch (err: unknown) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        console.error('Development server connection error:', error);
-        if (!win.isDestroyed()) {
-          win.webContents.send('dev-server-error', error.message);
-        }
-        app.quit();
-      }
-    };
-
-    // Wait for Vite to start before attempting to connect
-    setTimeout(loadDevServer, 1000);
-  } else {
-    console.log('Running in production mode');
-    const indexPath = path.join(__dirname, '../index.html');
-    console.log('Loading file:', indexPath);
-    win.loadFile(indexPath);
-  }
-
-  win.on('closed', () => {
-    console.log('Window closed');
-    win.destroy();
-  });
-}
-
 // Handle IPC messages
 ipcMain.handle('mcp:use-tool', async (_event: IpcMainInvokeEvent, request: MCPToolRequest): Promise<unknown> => {
   const { server_name, tool_name, arguments: args } = request;
-  console.log(`MCP tool request: ${server_name}/${tool_name}`, args);
-  // Forward to appropriate MCP server handler
-  // This will be implemented based on the MCP server configuration
-  return null;
+  console.log(`Forwarding MCP tool request: ${server_name}/${tool_name}`, { args, cwd: process.cwd() });
+  
+  try {
+    const configPath = process.env.VITE_CLAUDE_CONFIG_PATH;
+    if (!configPath) {
+      throw new Error(`VITE_CLAUDE_CONFIG_PATH environment variable not set. Available env vars: ${Object.keys(process.env).filter(key => key.startsWith('VITE_')).join(', ')}`);
+    }
+
+    console.log('Reading MCP config from:', configPath);
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    console.log('Available MCP servers:', Object.keys(config.mcpServers));
+    const serverConfig = config.mcpServers[server_name];
+    
+    if (!serverConfig) {
+      throw new Error(`MCP server "${server_name}" not found in configuration. Available servers: ${Object.keys(config.mcpServers).join(', ')}`);
+    }
+
+    const { spawn } = require('child_process');
+    console.log(`Spawning MCP server process:`, {
+      command: serverConfig.command,
+      args: serverConfig.args,
+      cwd: process.env.VITE_MEMORY_SERVICE_PATH,
+      env: Object.keys({ ...process.env, ...serverConfig.env })
+    });
+
+    const serverProcess = spawn(serverConfig.command, serverConfig.args, {
+      env: { 
+        ...process.env, 
+        ...serverConfig.env,
+        PYTHONPATH: process.env.VITE_MEMORY_SERVICE_PATH,
+        MCP_MEMORY_CHROMA_PATH: process.env.MCP_MEMORY_CHROMA_PATH,
+        MCP_MEMORY_BACKUPS_PATH: process.env.MCP_MEMORY_BACKUPS_PATH
+      },
+      cwd: process.env.VITE_MEMORY_SERVICE_PATH,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    
+    console.log('MCP server process spawned with:', {
+      pid: serverProcess.pid,
+      command: serverConfig.command,
+      args: serverConfig.args,
+      cwd: process.env.VITE_MEMORY_SERVICE_PATH,
+      env: {
+        PYTHONPATH: process.env.VITE_MEMORY_SERVICE_PATH,
+        MCP_MEMORY_CHROMA_PATH: process.env.MCP_MEMORY_CHROMA_PATH,
+        MCP_MEMORY_BACKUPS_PATH: process.env.MCP_MEMORY_BACKUPS_PATH
+      }
+    });
+
+    const jsonRpcRequest = {
+      jsonrpc: '2.0',
+      method: 'callTool',
+      params: {
+        name: tool_name,
+        arguments: args
+      },
+      id: Date.now()
+    };
+
+    console.log('Sending JSON-RPC request:', jsonRpcRequest);
+    serverProcess.stdin.write(JSON.stringify(jsonRpcRequest) + '\n');
+
+    return new Promise((resolve, reject) => {
+      let response = '';
+      
+      serverProcess.stdout.on('data', (data: Buffer) => {
+        console.log('Raw MCP server response:', data.toString());
+        response += data.toString();
+        if (response.includes('\n')) {
+          try {
+            const result = JSON.parse(response);
+            if (result.error) {
+              console.error('MCP server returned error:', result.error);
+              reject(new Error(result.error.message));
+              serverProcess.kill();
+            } else {
+              console.log('MCP server returned result:', result.result);
+              resolve(result.result);
+            }
+            serverProcess.kill();
+          } catch (err) {
+            const error = err instanceof Error ? err.message : String(err);
+            console.error('Error parsing MCP server response:', error);
+            console.error('Raw response was:', response);
+            reject(new Error(`Failed to parse MCP server response: ${error}`));
+            serverProcess.kill();
+          }
+        }
+      });
+
+      serverProcess.stderr.on('data', (data: Buffer) => {
+        console.error('MCP server stderr:', data.toString());
+        reject(new Error(`MCP server error: ${data}`));
+        serverProcess.kill();
+      });
+
+      serverProcess.on('error', (err: Error) => {
+        console.error('Failed to start MCP server:', err);
+        reject(new Error(`Failed to start MCP server: ${err.message}`));
+        serverProcess.kill();
+      });
+
+      setTimeout(() => {
+        console.error('MCP server request timed out');
+        serverProcess.kill();
+        reject(new Error('MCP server request timed out'));
+      }, 30000);
+    });
+  } catch (error) {
+    console.error('Error handling MCP tool request:', error instanceof Error ? error.message : error);
+    throw error;
+  }
 });
 
 app.whenReady().then(() => {
@@ -221,3 +178,17 @@ app.on('activate', () => {
     createWindow();
   }
 });
+
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
+}
