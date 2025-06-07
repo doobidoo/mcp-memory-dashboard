@@ -4,3 +4,6 @@
 node_modules
 .DS_Store
 .env
+dist/assets/*.*
+dist/electron/preload.js
+dist/index.html

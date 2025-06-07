@@ -1,6 +1,6 @@
-# MCP Memory Dashboard
+# MCP Memory Dashboard <img width="60" alt="grafik" src="https://github.com/user-attachments/assets/eab1f341-ca54-445c-905e-273cd9e89555" />
 
-A professional desktop application for managing and interacting with the **MCP Memory Service** - a semantic memory system built on the Model Context Protocol (MCP).
+A professional desktop application for managing and interacting with the **[MCP Memory Service](https://github.com/doobidoo/mcp-memory-service)** - a semantic memory system built on the Model Context Protocol (MCP).
 
 ## ✨ Features
 
