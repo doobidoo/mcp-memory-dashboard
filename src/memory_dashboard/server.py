@@ -63,31 +63,38 @@ def get_average_query_time():
 
 def parse_time_expression(query):
     """Parse natural language time expressions and convert to ChromaDB filters"""
-    import re
-    from datetime import datetime, timedelta
-    
-    query_lower = query.lower()
-    now = datetime.utcnow()
-    
-    # Time expressions mapping
-    time_filters = {
-        'today': now.replace(hour=0, minute=0, second=0, microsecond=0),
-        'yesterday': now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1),
-        'last week': now - timedelta(weeks=1),
-        'last month': now - timedelta(days=30),
-        'last 3 months': now - timedelta(days=90),
-        'this week': now - timedelta(days=now.weekday()),
-        'this month': now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    }
-    
-    # Find time expressions in query
-    for expression, cutoff_time in time_filters.items():
-        if expression in query_lower:
-            # Return both the cleaned query and time filter
-            cleaned_query = re.sub(re.escape(expression), '', query_lower).strip()
-            return cleaned_query, {"timestamp": {"$gte": cutoff_time.isoformat()}}
-    
-    return query, None
+    try:
+        import re
+        from datetime import datetime, timedelta
+        
+        query_lower = query.lower()
+        now = datetime.utcnow()
+        
+        # Time expressions mapping
+        time_filters = {
+            'today': now.replace(hour=0, minute=0, second=0, microsecond=0),
+            'yesterday': now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1),
+            'last week': now - timedelta(weeks=1),
+            'last month': now - timedelta(days=30),
+            'last 3 months': now - timedelta(days=90),
+            'this week': now - timedelta(days=now.weekday()),
+            'this month': now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        }
+        
+        # Find time expressions in query
+        for expression, cutoff_time in time_filters.items():
+            if expression in query_lower:
+                # Return both the cleaned query and time filter
+                cleaned_query = re.sub(re.escape(expression), '', query_lower).strip()
+                return cleaned_query, {"timestamp": {"$gte": cutoff_time.isoformat()}}
+        
+        # If no time expression found, return original query with no filter
+        return query, None
+        
+    except Exception as e:
+        print(f"Error parsing time expression '{query}': {e}")
+        # If parsing fails, return original query with no time filter
+        return query, None
 
 @server.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
@@ -117,6 +124,55 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["content"]
             }
+        ),
+        types.Tool(
+            name="dashboard_retrieve_memory", 
+            description="Dashboard version: Perform semantic search for relevant memories",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query"
+                    },
+                    "n_results": {
+                        "type": "number",
+                        "description": "Number of results to return",
+                        "default": 5
+                    }
+                },
+                "required": ["query"]
+            }
+        ),
+        types.Tool(
+            name="dashboard_search_by_tag",
+            description="Dashboard version: Retrieve memories by specific tags",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Tags to search for"
+                    }
+                },
+                "required": ["tags"]
+            }
+        ),
+        types.Tool(
+            name="dashboard_get_stats",
+            description="Dashboard version: Retrieve statistics about the memory database",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        types.Tool(
+            name="dashboard_optimize_db",
+            description="Dashboard version: Optimize the database",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        types.Tool(
+            name="dashboard_create_backup",
+            description="Dashboard version: Create a backup of the database",
+            inputSchema={"type": "object", "properties": {}}
         ),
         types.Tool(
             name="retrieve_memory",
@@ -351,6 +407,57 @@ async def handle_call_tool(
             print(f"Error retrieving memory from ChromaDB: {e}") # Or use proper logging
             raise ValueError(f"Failed to retrieve memories: {e}")
 
+    elif name == "dashboard_retrieve_memory":
+        query_text = arguments.get("query")
+        if not query_text:
+            raise ValueError("Query text cannot be empty for dashboard_retrieve_memory")
+        
+        n_results_val = arguments.get("n_results", 5)
+        
+        try:
+            # Track query time
+            start_time = time.time()
+            
+            results = collection.query(
+                query_texts=[query_text],
+                n_results=int(n_results_val),
+                include=['metadatas', 'documents', 'distances']
+            )
+            
+            # Record query time
+            end_time = time.time()
+            query_time_ms = (end_time - start_time) * 1000
+            query_times.append(query_time_ms)
+            
+            memories_list = []
+            ids = results.get('ids', [[]])[0]
+            documents = results.get('documents', [[]])[0]
+            metadatas = results.get('metadatas', [[]])[0]
+            distances = results.get('distances', [[]])[0]
+
+            for i in range(len(ids)):
+                similarity = 1.0 - (distances[i] if distances[i] is not None else 1.0)
+                current_metadata = metadatas[i] if metadatas[i] is not None else {}
+                memories_list.append({
+                    "id": ids[i],
+                    "content": documents[i] if documents[i] is not None else "",
+                    "metadata": current_metadata,
+                    "similarity": similarity,
+                    "tags": current_metadata.get("tags", []) if isinstance(current_metadata.get("tags"), list) else []
+                })
+            
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"memories": memories_list})
+            )]
+            
+        except Exception as e:
+            print(f"Error retrieving memory from ChromaDB: {e}")
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"memories": [], "error": str(e)})
+            )]
+
     elif name == "search_by_tag":
         tags_list = arguments.get("tags")
 
@@ -401,6 +508,60 @@ async def handle_call_tool(
         except Exception as e:
             print(f"Error searching by tag in ChromaDB: {e}")
             raise ValueError(f"Failed to search by tag: {e}")
+
+    elif name == "dashboard_search_by_tag":
+        tags_list = arguments.get("tags")
+
+        if not isinstance(tags_list, list) or not tags_list:
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"memories": []})
+            )]
+
+        or_conditions = []
+        for tag in tags_list:
+            if isinstance(tag, str) and tag.strip():
+                or_conditions.append({"tags": {"$contains": tag.strip()}})
+        
+        if not or_conditions:
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"memories": []})
+            )]
+
+        where_filter = {"$or": or_conditions}
+        
+        try:
+            results = collection.get(
+                where=where_filter,
+                include=['metadatas', 'documents']
+            )
+            
+            memories_list = []
+            ids = results.get('ids', [])
+            documents = results.get('documents', [])
+            metadatas = results.get('metadatas', [])
+
+            for i in range(len(ids)):
+                current_metadata = metadatas[i] if metadatas[i] is not None else {}
+                memories_list.append({
+                    "id": ids[i],
+                    "content": documents[i] if documents[i] is not None else "",
+                    "metadata": current_metadata,
+                    "tags": current_metadata.get("tags", []) if isinstance(current_metadata.get("tags"), list) else []
+                })
+            
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"memories": memories_list})
+            )]
+            
+        except Exception as e:
+            print(f"Error searching by tag in ChromaDB: {e}")
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"memories": [], "error": str(e)})
+            )]
 
     elif name == "delete_by_tag":
         tag_to_delete = arguments.get("tag")
@@ -524,6 +685,41 @@ async def handle_call_tool(
                 text=json.dumps(error_stats)
             )]
 
+    elif name == "dashboard_get_stats":
+        try:
+            total_memories = collection.count()
+            
+            # WARNING: This can be very slow and memory-intensive on large collections.
+            all_metadatas_results = collection.get(include=['metadatas'])
+            all_metadatas = all_metadatas_results.get('metadatas', [])
+            
+            unique_tags = set()
+            if all_metadatas: 
+                for meta in all_metadatas:
+                    if meta and isinstance(meta.get("tags"), list):
+                        for tag in meta["tags"]:
+                            unique_tags.add(tag)
+            
+            stats_data = {
+                "total_memories": total_memories,
+                "unique_tags": len(unique_tags)
+            }
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(stats_data)
+            )]
+        except Exception as e:
+            print(f"Error getting stats from ChromaDB: {e}")
+            error_stats = {
+                "total_memories": 0,
+                "unique_tags": 0,
+                "error": str(e)
+            }
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(error_stats)
+            )]
+
     elif name == "optimize_db":
         return [types.TextContent(
             type="text",
@@ -533,7 +729,60 @@ async def handle_call_tool(
             })
         )]
 
+    elif name == "dashboard_optimize_db":
+        return [types.TextContent(
+            type="text",
+            text=json.dumps({
+                "message": "Database optimization feature is not yet implemented.",
+                "status": "not_implemented"
+            })
+        )]
+
     elif name == "create_backup":
+        try:
+            # Create timestamped backup filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_filename = f"memory_backup_{timestamp}.tar.gz"
+            backup_full_path = os.path.join(BACKUPS_PATH, backup_filename)
+            
+            # Create backup of the entire chroma directory
+            import tarfile
+            
+            with tarfile.open(backup_full_path, "w:gz") as tar:
+                tar.add(CHROMA_PATH, arcname=os.path.basename(CHROMA_PATH))
+            
+            # Get backup file size
+            backup_size = os.path.getsize(backup_full_path)
+            backup_size_mb = round(backup_size / (1024 * 1024), 2)
+            
+            backup_info = {
+                "status": "success",
+                "message": "Backup created successfully!",
+                "backup_path": backup_full_path,
+                "backup_filename": backup_filename,
+                "backup_size_mb": backup_size_mb,
+                "timestamp": timestamp,
+                "original_path": CHROMA_PATH
+            }
+            
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(backup_info)
+            )]
+            
+        except Exception as e:
+            print(f"Error creating backup: {e}")
+            error_info = {
+                "status": "error",
+                "message": f"Failed to create backup: {str(e)}",
+                "backup_path": None
+            }
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(error_info)
+            )]
+
+    elif name == "dashboard_create_backup":
         try:
             # Create timestamped backup filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
