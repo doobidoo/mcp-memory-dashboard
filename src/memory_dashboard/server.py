@@ -153,6 +153,14 @@ async def handle_list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
+            name="dashboard_check_health",
+            description="Dashboard version: Check database health with JSON response",
+            inputSchema={
+                "type": "object",
+                "properties": {}
+            }
+        ),
+        types.Tool(
             name="check_database_health",
             description="Retrieve database health metrics",
             inputSchema={
@@ -194,6 +202,25 @@ async def handle_list_tools() -> list[types.Tool]:
                     }
                 },
                 "required": ["memory_id"]
+            }
+        ),
+        types.Tool(
+            name="dashboard_recall_memory",
+            description="Dashboard version: Retrieve memories using natural language time expressions",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Natural language query with time expressions (e.g., 'last week', 'yesterday')"
+                    },
+                    "n_results": {
+                        "type": "number",
+                        "description": "Number of results to return",
+                        "default": 5
+                    }
+                },
+                "required": ["query"]
             }
         ),
         types.Tool(
@@ -435,6 +462,32 @@ async def handle_call_tool(
                 text=json.dumps(health_status)
             )]
     
+    elif name == "dashboard_check_health":
+        try:
+            heartbeat_ns = client.heartbeat() 
+            health_status = {
+                "status": "healthy" if heartbeat_ns > 0 else "unhealthy",
+                "heartbeat_ns": heartbeat_ns,
+                "health": 100 if heartbeat_ns > 0 else 0, 
+                "avg_query_time": get_average_query_time()  # Use actual average
+            }
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(health_status)
+            )]
+        except Exception as e:
+            print(f"Error during dashboard health check: {e}")
+            health_status = {
+                "status": "unhealthy",
+                "error": str(e),
+                "health": 0,
+                "avg_query_time": get_average_query_time()
+            }
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(health_status)
+            )]
+    
     elif name == "get_stats":
         try:
             total_memories = collection.count()
@@ -636,6 +689,83 @@ async def handle_call_tool(
         except Exception as e:
             print(f"Error during recall: {e}")
             raise ValueError(f"Failed to recall memories: {e}")
+
+    elif name == "dashboard_recall_memory":
+        query_text = arguments.get("query")
+        if not query_text:
+            raise ValueError("Query text cannot be empty for dashboard_recall_memory")
+        
+        n_results_val = arguments.get("n_results", 5)
+        
+        try:
+            # Parse time expressions from query
+            cleaned_query, time_filter = parse_time_expression(query_text)
+            
+            # Track query time
+            start_time = time.time()
+            
+            if time_filter:
+                # If we have a time filter, use get() with where clause
+                results = collection.get(
+                    where=time_filter,
+                    include=['metadatas', 'documents']
+                )
+                
+                # Convert get results to query-like format
+                memories_list = []
+                ids = results.get('ids', [])
+                documents = results.get('documents', [])
+                metadatas = results.get('metadatas', [])
+                
+                for i in range(min(len(ids), n_results_val)):
+                    current_metadata = metadatas[i] if metadatas[i] is not None else {}
+                    memories_list.append({
+                        "id": ids[i],
+                        "content": documents[i] if documents[i] is not None else "",
+                        "metadata": current_metadata,
+                        "tags": current_metadata.get("tags", []) if isinstance(current_metadata.get("tags"), list) else []
+                    })
+            else:
+                # If no time filter, perform regular semantic search
+                results = collection.query(
+                    query_texts=[cleaned_query if cleaned_query else query_text],
+                    n_results=int(n_results_val),
+                    include=['metadatas', 'documents', 'distances']
+                )
+                
+                memories_list = []
+                ids = results.get('ids', [[]])[0]
+                documents = results.get('documents', [[]])[0]
+                metadatas = results.get('metadatas', [[]])[0]
+                distances = results.get('distances', [[]])[0]
+
+                for i in range(len(ids)):
+                    similarity = 1.0 - (distances[i] if distances[i] is not None else 1.0)
+                    current_metadata = metadatas[i] if metadatas[i] is not None else {}
+                    memories_list.append({
+                        "id": ids[i],
+                        "content": documents[i] if documents[i] is not None else "",
+                        "metadata": current_metadata,
+                        "similarity": similarity,
+                        "tags": current_metadata.get("tags", []) if isinstance(current_metadata.get("tags"), list) else []
+                    })
+            
+            # Record query time
+            end_time = time.time()
+            query_time_ms = (end_time - start_time) * 1000
+            query_times.append(query_time_ms)
+            
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"memories": memories_list})
+            )]
+            
+        except Exception as e:
+            print(f"Error during dashboard recall: {e}")
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"memories": [], "error": str(e)})
+            )]
 
     elif name == "check_embedding_model":
         # Here you would implement actual model check logic

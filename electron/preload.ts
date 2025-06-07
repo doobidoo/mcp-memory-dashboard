@@ -187,11 +187,11 @@ const memoryService = {
 
   async recall_memory(query: string, n_results = 5) {
     try {
-      console.log('Recalling memory with time expressions:', { query, n_results });
+      console.log('Recalling memory with time expressions using dashboard endpoint:', { query, n_results });
       
       const response = await mcpClient.use_mcp_tool({
         server_name: "memory",
-        tool_name: "recall_memory",
+        tool_name: "dashboard_recall_memory",
         arguments: { query, n_results }
       });
 

@@ -186,6 +186,7 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       console.log('Searching with query:', searchQuery.trim());
       const response = await window.electronAPI.memory.retrieve_memory(searchQuery.trim(), 5);
       console.log('Search response:', response);
+      console.log('Memories with IDs:', response.memories?.map(m => ({ id: m.id, hasId: !!m.id })));
 
       // Handle the response format from the new dashboard endpoint
       const memoriesArray = response.memories || [];
@@ -412,7 +413,7 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
           <div className="flex justify-between items-center">
             <CardTitle className="flex items-center gap-2">
               {getStatusIcon()}
-              Memory Service Dashboard
+              Memory Service Dashboard v1.2.0
               <span className={`text-sm font-normal ${getStatusColor()}`}>
                 ({getStatusText()})
               </span>
