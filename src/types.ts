@@ -41,7 +41,7 @@ export interface MemoryAPI {
   store_memory(content: string, metadata?: MemoryMetadata): Promise<void>;
   retrieve_memory(query: string, n_results?: number): Promise<MemoryResponse>;
   search_by_tag(tags: string[]): Promise<MemoryResponse>;
-  delete_by_tag(tag: string): Promise<void>;
+  delete_by_tag(tagOrTags: string | string[]): Promise<void>;
   check_database_health(): Promise<DatabaseHealth>;
   get_stats(): Promise<DatabaseStats>;
   optimize_db(): Promise<any>;

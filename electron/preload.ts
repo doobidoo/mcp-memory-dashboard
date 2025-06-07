@@ -155,12 +155,12 @@ const memoryService = {
     }
   },
 
-  async delete_by_tag(tag: string) {
-    console.log('Deleting by tag:', tag);
+  async delete_by_tag(tagOrTags: string | string[]) {
+    console.log('Deleting by tag(s):', tagOrTags);
     return await mcpClient.use_mcp_tool({
       server_name: "memory",
       tool_name: "delete_by_tag",
-      arguments: { tag }
+      arguments: { tag: tagOrTags }
     });
   },
 

@@ -54,6 +54,9 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
     dbHealth: 100,
     avgQueryTime: 0
   });
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [serviceStatus, setServiceStatus] = useState<'unknown' | 'healthy' | 'unhealthy'>('unknown');
 
@@ -240,9 +243,12 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
     }
   };
 
-  const handleDeleteTag = async (tag: string) => {
-    if (!tag.trim()) {
-      setError('Tag cannot be empty');
+  const handleDeleteTag = async (tags: string | string[]) => {
+    const tagArray = Array.isArray(tags) ? tags : [tags];
+    const validTags = tagArray.filter(tag => tag && tag.trim());
+    
+    if (validTags.length === 0) {
+      setError('Tag(s) cannot be empty');
       return;
     }
 
@@ -252,12 +258,14 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
         throw new Error('Memory API not available');
       }
 
-      await window.electronAPI.memory.delete_by_tag(tag.trim());
+      // Use the enhanced delete_by_tag method that supports both single and multiple tags
+      await window.electronAPI.memory.delete_by_tag(validTags.length === 1 ? validTags[0] : validTags);
       await loadStats();
       setError(null);
       setSearchQuery('');
+      setSelectedTags([]);
     } catch (err) {
-      setError('Failed to delete memories by tag: ' + (err as Error).message);
+      setError('Failed to delete memories by tag(s): ' + (err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -519,23 +527,84 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
                 <input
                   type="text"
                   className="flex-1 p-2 border rounded-md"
-                  placeholder="Enter tag to delete..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Enter tag to add for deletion..."
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && tagInput.trim()) {
+                      const newTag = tagInput.trim();
+                      if (!selectedTags.includes(newTag)) {
+                        setSelectedTags([...selectedTags, newTag]);
+                        setTagInput('');
+                      }
+                    }
+                  }}
                   disabled={loading}
                 />
                 <button
-                  onClick={() => handleDeleteTag(searchQuery)}
-                  disabled={loading || !searchQuery.trim()}
+                  onClick={() => {
+                    if (tagInput.trim() && !selectedTags.includes(tagInput.trim())) {
+                      setSelectedTags([...selectedTags, tagInput.trim()]);
+                      setTagInput('');
+                    }
+                  }}
+                  disabled={loading || !tagInput.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:bg-blue-300"
+                >
+                  Add Tag
+                </button>
+              </div>
+              
+              {/* Selected Tags Display */}
+              {selectedTags.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-gray-700">Selected tags to delete:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTags.map((tag, index) => (
+                      <span
+                        key={index}
+                        className="px-3 py-1 bg-red-100 text-red-800 rounded-md flex items-center gap-2"
+                      >
+                        {tag}
+                        <button
+                          onClick={() => setSelectedTags(selectedTags.filter((_, i) => i !== index))}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleDeleteTag(selectedTags.length === 1 ? selectedTags[0] : selectedTags)}
+                  disabled={loading || selectedTags.length === 0}
                   className="px-4 py-2 bg-red-600 text-white rounded-md flex items-center gap-2 disabled:bg-red-300"
                 >
                   <Trash2 className="w-4 h-4" />
-                  Delete Tag
+                  Delete {selectedTags.length === 1 ? 'Tag' : `${selectedTags.length} Tags`}
+                </button>
+                <button
+                  onClick={() => setSelectedTags([])}
+                  disabled={loading || selectedTags.length === 0}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-md disabled:bg-gray-300"
+                >
+                  Clear Selection
                 </button>
               </div>
+              
               <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded-md">
                 <p className="text-sm">
-                  <strong>Warning:</strong> This will permanently delete all memories with the specified tag.
+                  <strong>Warning:</strong> This will permanently delete all memories containing 
+                  {selectedTags.length === 1 ? ' the selected tag' : ' any of the selected tags'}.
+                  {selectedTags.length > 1 && (
+                    <span className="block mt-1">
+                      <strong>Note:</strong> Memories with ANY of these tags will be deleted (OR logic).
+                    </span>
+                  )}
                 </p>
               </div>
             </div>

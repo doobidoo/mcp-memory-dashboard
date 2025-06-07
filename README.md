@@ -22,6 +22,13 @@ A professional desktop application for managing and interacting with the **MCP M
 - **Health Checks**: Validate database integrity and performance
 - **Auto-initialization**: Seamless ChromaDB setup and configuration
 
+### 🏷️ **Enhanced Tag Management**
+- **Multiple Tag Deletion**: Select and delete multiple tags simultaneously
+- **Visual Tag Selection**: Interactive tag chips with add/remove functionality
+- **Flexible Delete Options**: Support for both single and multiple tag deletion
+- **API Consistency**: Consistent interface with search functionality
+- **Clear Warnings**: Understand OR vs AND logic for tag operations
+
 ### 🎨 **User Experience**
 - **Loading Indicators**: Visual feedback during database initialization
 - **Progress Tracking**: Step-by-step status updates during startup
@@ -110,9 +117,12 @@ Ensure your MCP Memory Service is properly configured in your Claude Desktop con
 
 ### Managing Tags
 1. Navigate to the **Tag Management** tab
-2. Enter a tag name to delete
-3. Click **Delete Tag** to remove all memories with that tag
-4. ⚠️ **Warning**: This permanently deletes all memories with the specified tag
+2. Enter tags one by one in the input field and press Enter or click "Add Tag"
+3. Selected tags appear as visual chips with remove (×) buttons
+4. Remove unwanted tags by clicking the × on each chip
+5. Click **Delete Tags** to remove all memories containing any of the selected tags
+6. Use **Clear Selection** to remove all selected tags without deleting
+7. ⚠️ **Warning**: Uses OR logic - memories with ANY selected tag will be deleted
 
 ### Dashboard Operations
 - **Refresh Stats**: Click the settings icon to reload statistics
@@ -174,6 +184,11 @@ Creates optimized production build in `dist/` directory.
 - Subsequent operations are faster (2-5 seconds)
 - This is expected behavior for vector database operations
 
+**Enhanced tag management not working**
+- Ensure you're using MCP Memory Service v1.1.0+ with Issue 5 fixes
+- Verify the enhanced delete_by_tag functionality is available
+- Check console logs (F12) for API compatibility messages
+
 **Stats showing 0 despite having memories**
 - Wait for full dashboard initialization to complete
 - Check that ChromaDB path has proper read/write permissions
@@ -225,7 +240,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📈 Version History
 
-### v1.0.0 (Current)
+### v1.1.0 (Current) - Enhanced Tag Management
+- ✅ **Multiple Tag Deletion**: Select and delete multiple tags simultaneously
+- ✅ **Visual Tag Interface**: Interactive tag chips with add/remove functionality  
+- ✅ **Enhanced UX**: Consistent interface with search functionality
+- ✅ **API Consistency**: Resolved delete tag function ambiguity (Issue 5)
+- ✅ **Backward Compatibility**: All existing functionality preserved
+- ✅ **Improved Warnings**: Clear explanations of OR vs AND logic
+- ✅ **Better Error Handling**: Enhanced user feedback and validation
+
+### v1.0.0 - Core Functionality
 - ✅ Complete MCP Memory Service integration
 - ✅ Full CRUD operations for memories
 - ✅ Real-time statistics and health monitoring  
