@@ -676,8 +676,16 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
                   </div>
                 )}
                 {memories.map((memory, index) => {
-                  const timestamp = memory.metadata?.timestamp || new Date().toISOString();
-                  const formattedDate = new Date(timestamp).toLocaleString();
+                  // Prefer updated_at, then created_at, then fallback to metadata.timestamp, then fallback to nothing
+                  const timestamp =
+                    memory.metadata?.updated_at_iso ||
+                    (memory.metadata?.updated_at ? new Date(memory.metadata?.updated_at * 1000).toISOString() : null) ||
+                    (memory.metadata?.created_at ? new Date(memory.metadata?.created_at * 1000).toISOString() : null) ||
+                    memory.metadata?.timestamp ||
+                    null;
+                  const formattedDate = timestamp
+                    ? new Date(timestamp).toLocaleString()
+                    : 'Unknown date';
 
                   return (
                     <Card key={memory.id || index} className="hover:shadow-lg transition-shadow">
