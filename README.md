@@ -59,6 +59,8 @@ A professional desktop application for managing and interacting with the **MCP M
 
 3. **Configure environment variables**:
    Create a `.env` file in the project root:
+
+   **macOS/Linux:**
    ```env
    VITE_MEMORY_SERVICE_PATH="/path/to/mcp-memory-service"
    VITE_MEMORY_CHROMA_PATH="/Users/yourusername/Library/Application Support/mcp-memory/chroma_db"
@@ -66,10 +68,37 @@ A professional desktop application for managing and interacting with the **MCP M
    VITE_CLAUDE_CONFIG_PATH="/Users/yourusername/Library/Application Support/Claude/claude_desktop_config.json"
    ```
 
+   **Windows:**
+   ```env
+   VITE_MEMORY_SERVICE_PATH="C:\path\to\mcp-memory-service"
+   VITE_MEMORY_CHROMA_PATH="C:\Users\%USERNAME%\AppData\Local\mcp-memory\chroma_db"
+   VITE_MEMORY_BACKUPS_PATH="C:\Users\%USERNAME%\AppData\Local\mcp-memory\backups"
+   VITE_CLAUDE_CONFIG_PATH="C:\Users\%USERNAME%\AppData\Roaming\Claude\claude_desktop_config.json"
+   ```
+
 4. **Start the application**:
    ```bash
    npm start
    ```
+
+## 🪟 Windows-Specific Notes
+
+### Path Configuration
+- Use **double backslashes** (`\\`) or **forward slashes** (`/`) in paths
+- The `%USERNAME%` environment variable automatically resolves to your Windows username
+- Claude Desktop config is stored in `AppData\Roaming\Claude\`
+- Memory data is stored in `AppData\Local\mcp-memory\`
+
+### PowerShell Execution Policy
+If you encounter script execution errors, you may need to enable script execution:
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+### Common Windows Paths
+- **Claude Config**: `C:\Users\<username>\AppData\Roaming\Claude\claude_desktop_config.json`
+- **Memory Database**: `C:\Users\<username>\AppData\Local\mcp-memory\chroma_db`
+- **Backups**: `C:\Users\<username>\AppData\Local\mcp-memory\backups`
 
 ## ⚙️ Configuration
 
@@ -77,6 +106,7 @@ A professional desktop application for managing and interacting with the **MCP M
 
 Ensure your MCP Memory Service is properly configured in your Claude Desktop configuration:
 
+**macOS/Linux:**
 ```json
 {
   "mcpServers": {
@@ -92,14 +122,30 @@ Ensure your MCP Memory Service is properly configured in your Claude Desktop con
 }
 ```
 
+**Windows:**
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "uv",
+      "args": ["--directory", "C:\\path\\to\\mcp-memory-service", "run", "memory"],
+      "env": {
+        "MCP_MEMORY_CHROMA_PATH": "C:\\Users\\yourusername\\AppData\\Local\\mcp-memory\\chroma_db",
+        "MCP_MEMORY_BACKUPS_PATH": "C:\\Users\\yourusername\\AppData\\Local\\mcp-memory\\backups"
+      }
+    }
+  }
+}
+```
+
 ### Environment Variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `VITE_MEMORY_SERVICE_PATH` | Path to MCP Memory Service | `/path/to/mcp-memory-service` |
-| `VITE_MEMORY_CHROMA_PATH` | ChromaDB database directory | `~/Library/Application Support/mcp-memory/chroma_db` |
-| `VITE_MEMORY_BACKUPS_PATH` | Backup storage directory | `~/Library/Application Support/mcp-memory/backups` |
-| `VITE_CLAUDE_CONFIG_PATH` | Claude Desktop config file | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Variable | Description | macOS/Linux Example | Windows Example |
+|----------|-------------|---------------------|-----------------|
+| `VITE_MEMORY_SERVICE_PATH` | Path to MCP Memory Service | `/path/to/mcp-memory-service` | `C:\path\to\mcp-memory-service` |
+| `VITE_MEMORY_CHROMA_PATH` | ChromaDB database directory | `~/Library/Application Support/mcp-memory/chroma_db` | `C:\Users\%USERNAME%\AppData\Local\mcp-memory\chroma_db` |
+| `VITE_MEMORY_BACKUPS_PATH` | Backup storage directory | `~/Library/Application Support/mcp-memory/backups` | `C:\Users\%USERNAME%\AppData\Local\mcp-memory\backups` |
+| `VITE_CLAUDE_CONFIG_PATH` | Claude Desktop config file | `~/Library/Application Support/Claude/claude_desktop_config.json` | `C:\Users\%USERNAME%\AppData\Roaming\Claude\claude_desktop_config.json` |
 
 ## 🎯 Usage
 
