@@ -48,6 +48,8 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
   const [content, setContent] = useState('');
   const [tags, setTags] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [recallQuery, setRecallQuery] = useState('');
+  const [backupMessage, setBackupMessage] = useState<string | null>(null);
   const [stats, setStats] = useState({
     totalMemories: 0,
     tagsCount: 0,
@@ -198,6 +200,70 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
     }
   };
 
+  const handleRecall = async (query?: string) => {
+    const queryToUse = query || recallQuery;
+    if (!queryToUse.trim()) {
+      setError('Recall query cannot be empty');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (!window.electronAPI?.memory) {
+        throw new Error('Memory API not available');
+      }
+
+      console.log('Recalling with query:', queryToUse.trim());
+      const response = await window.electronAPI.memory.recall_memory(queryToUse.trim(), 5);
+      console.log('Recall response:', response);
+
+      const memoriesArray = response.memories || [];
+      setMemories(memoriesArray);
+      setError(null);
+      
+      // If this was triggered by a button, update the query field
+      if (query) {
+        setRecallQuery(query);
+      }
+    } catch (recallError) {
+      const err = recallError instanceof Error ? recallError : new Error(String(recallError));
+      console.error('Recall failed:', err);
+      setError('Recall failed: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteMemory = async (memoryId: string) => {
+    if (!confirm('Are you sure you want to delete this memory? This action cannot be undone.')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (!window.electronAPI?.memory) {
+        throw new Error('Memory API not available');
+      }
+
+      const result = await window.electronAPI.memory.delete_memory(memoryId);
+      console.log('Delete result:', result);
+
+      if (result.status === 'success') {
+        // Remove the deleted memory from the current view
+        setMemories(memories.filter(memory => memory.id !== memoryId));
+        await loadStats(); // Refresh stats
+        setError(null);
+      } else {
+        setError(result.message || 'Failed to delete memory');
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setError('Failed to delete memory: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleOptimize = async () => {
     setLoading(true);
     try {
@@ -223,6 +289,7 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
 
   const handleBackup = async () => {
     setLoading(true);
+    setBackupMessage(null);
     try {
       if (!window.electronAPI?.memory) {
         throw new Error('Memory API not available');
@@ -231,10 +298,14 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       const result = await window.electronAPI.memory.create_backup();
       console.log('Backup result:', result);
 
-      if (result.status === 'not_implemented') {
+      if (result.status === 'success') {
+        const message = `✅ Backup created successfully!\n📁 Location: ${result.backup_path}\n📊 Size: ${result.backup_size_mb} MB\n🕒 Timestamp: ${result.timestamp}`;
+        setBackupMessage(message);
+        setError(null);
+      } else if (result.status === 'not_implemented') {
         setError('Database backup feature is not yet implemented');
       } else {
-        setError(null);
+        setError(result.message || 'Failed to create backup');
       }
     } catch (err) {
       setError('Failed to create backup: ' + (err as Error).message);
@@ -375,10 +446,11 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-4 gap-4 mb-6">
             {[
               { id: 'store', icon: Save, label: 'Store Memory' },
               { id: 'search', icon: Search, label: 'Search Memories' },
+              { id: 'recall', icon: RefreshCw, label: 'Recall by Time' },
               { id: 'tags', icon: Tag, label: 'Tag Management' }
             ].map(({ id, icon: Icon, label }) => (
               <button
@@ -401,6 +473,22 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
               <div>
                 <p className="font-medium">Notice</p>
                 <p className="text-sm">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {backupMessage && (
+            <div className="bg-green-100 border border-green-200 text-green-800 p-4 rounded-md mb-4 flex items-start gap-2">
+              <Save className="w-5 h-5 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium">Backup Success</p>
+                <pre className="text-sm mt-1 whitespace-pre-wrap">{backupMessage}</pre>
+                <button
+                  onClick={() => setBackupMessage(null)}
+                  className="text-sm text-green-600 hover:text-green-800 mt-2 underline"
+                >
+                  Dismiss
+                </button>
               </div>
             </div>
           )}
@@ -470,11 +558,139 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
                       <CardContent className="p-4">
                         <div className="flex justify-between items-start mb-2">
                           <div className="text-sm text-gray-500">{formattedDate}</div>
-                          {memory.similarity && (
-                            <div className="text-sm text-gray-500">
-                              Similarity: {(memory.similarity * 100).toFixed(1)}%
+                          <div className="flex items-center gap-2">
+                            {memory.similarity && (
+                              <div className="text-sm text-gray-500">
+                                Similarity: {(memory.similarity * 100).toFixed(1)}%
+                              </div>
+                            )}
+                            {memory.id && (
+                              <button
+                                onClick={() => handleDeleteMemory(memory.id!)}
+                                disabled={loading}
+                                className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded disabled:opacity-50"
+                                title="Delete this memory"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="text-gray-800">
+                            {memory.content.length > 200 ? (
+                              <>
+                                {expandedIndex === index
+                                  ? memory.content
+                                  : `${memory.content.slice(0, 200)}...`}
+                                <button
+                                  className="text-blue-600 hover:underline ml-2"
+                                  onClick={() => setExpandedIndex(expandedIndex === index ? null : index)}
+                                >
+                                  {expandedIndex === index ? 'Show less' : 'Show more'}
+                                </button>
+                              </>
+                            ) : (
+                              memory.content
+                            )}
+                          </div>
+
+                          {memory.tags && memory.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {memory.tags.map((tag, tagIndex) => (
+                                <span
+                                  key={tagIndex}
+                                  className="px-2 py-1 rounded-md text-sm"
+                                  style={{
+                                    backgroundColor: `hsl(${tag.charCodeAt(0) % 360}, 70%, 90%)`,
+                                    color: `hsl(${tag.charCodeAt(0) % 360}, 70%, 30%)`
+                                  }}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
                             </div>
                           )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {selectedTab === 'recall' && (
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="flex-1 p-2 border rounded-md"
+                  placeholder="Enter time expression (e.g., 'last week', 'yesterday')..."
+                  value={recallQuery}
+                  onChange={(e) => setRecallQuery(e.target.value)}
+                  disabled={loading}
+                />
+                <button
+                  onClick={() => handleRecall()}
+                  disabled={loading}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md flex items-center gap-2 disabled:bg-blue-300"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Recall
+                </button>
+              </div>
+              
+              {/* Quick Filter Buttons */}
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-gray-700">Quick Filters:</div>
+                <div className="flex flex-wrap gap-2">
+                  {['today', 'yesterday', 'last week', 'last month', 'last 3 months'].map((timeFilter) => (
+                    <button
+                      key={timeFilter}
+                      onClick={() => handleRecall(timeFilter)}
+                      disabled={loading}
+                      className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm disabled:opacity-50"
+                    >
+                      {timeFilter.charAt(0).toUpperCase() + timeFilter.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {memories.length === 0 && recallQuery && (
+                  <div className="text-gray-500 text-center py-4">
+                    No memories found for "{recallQuery}"
+                  </div>
+                )}
+                {memories.map((memory, index) => {
+                  const timestamp = memory.metadata?.timestamp || new Date().toISOString();
+                  const formattedDate = new Date(timestamp).toLocaleString();
+
+                  return (
+                    <Card key={memory.id || index} className="hover:shadow-lg transition-shadow">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="text-sm text-gray-500">{formattedDate}</div>
+                          <div className="flex items-center gap-2">
+                            {memory.similarity && (
+                              <div className="text-sm text-gray-500">
+                                Similarity: {(memory.similarity * 100).toFixed(1)}%
+                              </div>
+                            )}
+                            {memory.id && (
+                              <button
+                                onClick={() => handleDeleteMemory(memory.id!)}
+                                disabled={loading}
+                                className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded disabled:opacity-50"
+                                title="Delete this memory"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         <div className="space-y-2">

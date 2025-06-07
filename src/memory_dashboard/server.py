@@ -9,14 +9,25 @@ import chromadb
 import os
 import json
 import uuid
+import time
+import shutil
 from datetime import datetime
+from pathlib import Path
+from collections import deque
 
 # Initialize the server
 server = Server("memory-dashboard")
 
+# Query time tracking
+query_times = deque(maxlen=50)  # Track last 50 query times
+
 CHROMA_PATH = os.environ.get("MCP_MEMORY_CHROMA_PATH")
 if not CHROMA_PATH:
     raise ValueError("MCP_MEMORY_CHROMA_PATH environment variable not set.")
+
+# Backup path configuration
+BACKUPS_PATH = os.environ.get("MCP_MEMORY_BACKUPS_PATH", os.path.join(os.path.dirname(CHROMA_PATH), "backups"))
+os.makedirs(BACKUPS_PATH, exist_ok=True)
 
 # Use a persistent client if a path is provided, otherwise use an in-memory client (for local dev/testing if needed)
 # However, the issue implies connecting to a *given* chroma db, so path is mandatory.
@@ -32,6 +43,51 @@ except Exception as e:
     # Handle potential errors during collection creation/retrieval
     # For now, we can re-raise or log, but this indicates a setup issue.
     raise ValueError(f"Failed to get or create ChromaDB collection '{COLLECTION_NAME}': {e}")
+
+def track_query_time(func):
+    """Decorator to track query execution times"""
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        query_time_ms = (end_time - start_time) * 1000
+        query_times.append(query_time_ms)
+        return result
+    return wrapper
+
+def get_average_query_time():
+    """Calculate average query time from recent queries"""
+    if not query_times:
+        return 0
+    return round(sum(query_times) / len(query_times), 2)
+
+def parse_time_expression(query):
+    """Parse natural language time expressions and convert to ChromaDB filters"""
+    import re
+    from datetime import datetime, timedelta
+    
+    query_lower = query.lower()
+    now = datetime.utcnow()
+    
+    # Time expressions mapping
+    time_filters = {
+        'today': now.replace(hour=0, minute=0, second=0, microsecond=0),
+        'yesterday': now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1),
+        'last week': now - timedelta(weeks=1),
+        'last month': now - timedelta(days=30),
+        'last 3 months': now - timedelta(days=90),
+        'this week': now - timedelta(days=now.weekday()),
+        'this month': now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    }
+    
+    # Find time expressions in query
+    for expression, cutoff_time in time_filters.items():
+        if expression in query_lower:
+            # Return both the cleaned query and time filter
+            cleaned_query = re.sub(re.escape(expression), '', query_lower).strip()
+            return cleaned_query, {"timestamp": {"$gte": cutoff_time.isoformat()}}
+    
+    return query, None
 
 @server.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
@@ -127,6 +183,39 @@ async def handle_list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
+            name="delete_memory",
+            description="Delete an individual memory by its ID",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "memory_id": {
+                        "type": "string",
+                        "description": "The ID of the memory to delete"
+                    }
+                },
+                "required": ["memory_id"]
+            }
+        ),
+        types.Tool(
+            name="recall_memory",
+            description="Retrieve memories using natural language time expressions",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Natural language query with time expressions (e.g., 'last week', 'yesterday')"
+                    },
+                    "n_results": {
+                        "type": "number",
+                        "description": "Number of results to return",
+                        "default": 5
+                    }
+                },
+                "required": ["query"]
+            }
+        ),
+        types.Tool(
             name="get_stats",
             description="Retrieve statistics about the memory database.",
             inputSchema={"type": "object", "properties": {}}
@@ -190,11 +279,19 @@ async def handle_call_tool(
         n_results_val = arguments.get("n_results", 5)
         
         try:
+            # Track query time
+            start_time = time.time()
+            
             results = collection.query(
                 query_texts=[query_text],
                 n_results=int(n_results_val),
                 include=['metadatas', 'documents', 'distances'] # Ensure these are included
             )
+            
+            # Record query time
+            end_time = time.time()
+            query_time_ms = (end_time - start_time) * 1000
+            query_times.append(query_time_ms)
             
             memories_list = []
             # Results from query are structured with lists of lists for batch queries,
@@ -319,7 +416,7 @@ async def handle_call_tool(
                 "status": "healthy" if heartbeat_ns > 0 else "unhealthy",
                 "heartbeat_ns": heartbeat_ns,
                 "health": 100 if heartbeat_ns > 0 else 0, 
-                "avg_query_time": 0 
+                "avg_query_time": get_average_query_time()  # Use actual average
             }
             return [types.TextContent(
                 type="text",
@@ -331,7 +428,7 @@ async def handle_call_tool(
                 "status": "unhealthy",
                 "error": str(e),
                 "health": 0,
-                "avg_query_time": 0
+                "avg_query_time": get_average_query_time()
             }
             return [types.TextContent(
                 type="text",
@@ -384,16 +481,161 @@ async def handle_call_tool(
         )]
 
     elif name == "create_backup":
-        backup_path_env = os.environ.get("MCP_MEMORY_BACKUPS_PATH", "Not configured")
-        message = f"Database backup feature is not yet implemented. Backups would target: {backup_path_env}"
+        try:
+            # Create timestamped backup filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_filename = f"memory_backup_{timestamp}.tar.gz"
+            backup_full_path = os.path.join(BACKUPS_PATH, backup_filename)
+            
+            # Create backup of the entire chroma directory
+            import tarfile
+            
+            with tarfile.open(backup_full_path, "w:gz") as tar:
+                tar.add(CHROMA_PATH, arcname=os.path.basename(CHROMA_PATH))
+            
+            # Get backup file size
+            backup_size = os.path.getsize(backup_full_path)
+            backup_size_mb = round(backup_size / (1024 * 1024), 2)
+            
+            backup_info = {
+                "status": "success",
+                "message": "Backup created successfully!",
+                "backup_path": backup_full_path,
+                "backup_filename": backup_filename,
+                "backup_size_mb": backup_size_mb,
+                "timestamp": timestamp,
+                "original_path": CHROMA_PATH
+            }
+            
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(backup_info)
+            )]
+            
+        except Exception as e:
+            print(f"Error creating backup: {e}")
+            error_info = {
+                "status": "error",
+                "message": f"Failed to create backup: {str(e)}",
+                "backup_path": None
+            }
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(error_info)
+            )]
+
+    elif name == "delete_memory":
+        memory_id = arguments.get("memory_id")
+        if not memory_id:
+            raise ValueError("Memory ID cannot be empty for delete_memory")
         
-        return [types.TextContent(
-            type="text",
-            text=json.dumps({
-                "message": message,
-                "status": "not_implemented"
-            })
-        )]
+        try:
+            # Check if memory exists first
+            existing = collection.get(ids=[memory_id])
+            if not existing['ids']:
+                return [types.TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "status": "error",
+                        "message": f"Memory with ID {memory_id} not found"
+                    })
+                )]
+            
+            # Delete the memory
+            collection.delete(ids=[memory_id])
+            
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({
+                    "status": "success",
+                    "message": f"Successfully deleted memory with ID: {memory_id}"
+                })
+            )]
+            
+        except Exception as e:
+            print(f"Error deleting memory '{memory_id}': {e}")
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({
+                    "status": "error", 
+                    "message": f"Failed to delete memory: {str(e)}"
+                })
+            )]
+
+    elif name == "recall_memory":
+        query_text = arguments.get("query")
+        if not query_text:
+            raise ValueError("Query text cannot be empty for recall_memory")
+        
+        n_results_val = arguments.get("n_results", 5)
+        
+        try:
+            # Parse time expressions from query
+            cleaned_query, time_filter = parse_time_expression(query_text)
+            
+            # Track query time
+            start_time = time.time()
+            
+            if time_filter:
+                # If we have a time filter, use get() with where clause
+                # Note: ChromaDB metadata filtering is limited, this is a basic implementation
+                results = collection.get(
+                    where=time_filter,
+                    include=['metadatas', 'documents']
+                )
+                
+                # Convert get results to query-like format
+                memories_list = []
+                ids = results.get('ids', [])
+                documents = results.get('documents', [])
+                metadatas = results.get('metadatas', [])
+                
+                for i in range(min(len(ids), n_results_val)):
+                    current_metadata = metadatas[i] if metadatas[i] is not None else {}
+                    memories_list.append({
+                        "id": ids[i],
+                        "content": documents[i] if documents[i] is not None else "",
+                        "metadata": current_metadata,
+                        "tags": current_metadata.get("tags", []) if isinstance(current_metadata.get("tags"), list) else []
+                    })
+            else:
+                # If no time filter, perform regular semantic search
+                results = collection.query(
+                    query_texts=[cleaned_query if cleaned_query else query_text],
+                    n_results=int(n_results_val),
+                    include=['metadatas', 'documents', 'distances']
+                )
+                
+                memories_list = []
+                ids = results.get('ids', [[]])[0]
+                documents = results.get('documents', [[]])[0]
+                metadatas = results.get('metadatas', [[]])[0]
+                distances = results.get('distances', [[]])[0]
+
+                for i in range(len(ids)):
+                    similarity = 1.0 - (distances[i] if distances[i] is not None else 1.0)
+                    current_metadata = metadatas[i] if metadatas[i] is not None else {}
+                    memories_list.append({
+                        "id": ids[i],
+                        "content": documents[i] if documents[i] is not None else "",
+                        "metadata": current_metadata,
+                        "similarity": similarity,
+                        "tags": current_metadata.get("tags", []) if isinstance(current_metadata.get("tags"), list) else []
+                    })
+            
+            # Record query time
+            end_time = time.time()
+            query_time_ms = (end_time - start_time) * 1000
+            query_times.append(query_time_ms)
+            
+            return [types.TextContent(
+                type="text",
+                text=json.dumps({"memories": memories_list})
+            )]
+            
+        except Exception as e:
+            print(f"Error during recall: {e}")
+            raise ValueError(f"Failed to recall memories: {e}")
 
     elif name == "check_embedding_model":
         # Here you would implement actual model check logic

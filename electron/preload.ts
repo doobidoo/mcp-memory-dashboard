@@ -164,6 +164,62 @@ const memoryService = {
     });
   },
 
+  async delete_memory(memory_id: string) {
+    console.log('Deleting individual memory:', memory_id);
+    const response = await mcpClient.use_mcp_tool({
+      server_name: "memory",
+      tool_name: "delete_memory",
+      arguments: { memory_id }
+    });
+
+    // Parse MCP response format
+    let jsonText: string;
+    if (response && response.content && response.content[0] && response.content[0].text) {
+      jsonText = response.content[0].text;
+    } else if (typeof response === 'string') {
+      jsonText = response;
+    } else {
+      jsonText = JSON.stringify(response);
+    }
+
+    return JSON.parse(jsonText);
+  },
+
+  async recall_memory(query: string, n_results = 5) {
+    try {
+      console.log('Recalling memory with time expressions:', { query, n_results });
+      
+      const response = await mcpClient.use_mcp_tool({
+        server_name: "memory",
+        tool_name: "recall_memory",
+        arguments: { query, n_results }
+      });
+
+      // Parse MCP response format
+      let jsonText: string;
+      if (response && response.content && response.content[0] && response.content[0].text) {
+        jsonText = response.content[0].text;
+      } else if (typeof response === 'string') {
+        jsonText = response;
+      } else {
+        jsonText = JSON.stringify(response);
+      }
+
+      const parsedResponse: DashboardResponse = JSON.parse(jsonText);
+
+      if (parsedResponse.error) {
+        throw new Error(parsedResponse.error);
+      }
+
+      return {
+        memories: parsedResponse.memories || []
+      };
+    } catch (error) {
+      console.error('Error recalling memory:', error);
+      throw error;
+    }
+  },
+
   async check_database_health() {
     try {
       console.log('Checking database health using dashboard endpoint');

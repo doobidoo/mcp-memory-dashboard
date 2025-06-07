@@ -6,21 +6,25 @@ A professional desktop application for managing and interacting with the **MCP M
 
 ### 🧠 **Memory Management**
 - **Store Memories**: Save content with tags and metadata
-- **Semantic Search**: Find memories using natural language queries  
-- **Tag Management**: Organize and delete memories by tags
-- **Real-time Results**: Instant search and retrieval
+- **Semantic Search**: Find memories using natural language queries with individual delete buttons
+- **Time-Based Recall**: Search memories by time expressions ("yesterday", "last week", etc.)
+- **Individual Memory Deletion**: Delete specific memories with confirmation dialogs
+- **Tag Management**: Organize and delete memories by tags with multiple selection
+- **Real-time Results**: Instant search and retrieval with similarity scores
 
 ### 📊 **Dashboard & Analytics**
 - **Live Statistics**: Total memories, unique tags, database health
 - **Database Health Monitoring**: Real-time health status (0-100%)
-- **Performance Metrics**: Average query time tracking
+- **Performance Metrics**: Real average query time tracking (1-3 seconds)
 - **Storage Information**: Database size and path information
+- **4-Tab Interface**: Dedicated tabs for Store, Search, Recall, and Tag Management
 
 ### 🔧 **Database Operations**
 - **Database Optimization**: Clean up and optimize vector indices
-- **Backup Creation**: Create timestamped backups of your memory database
+- **Backup Creation**: Create timestamped backups with detailed feedback (file path, size, timestamp)
 - **Health Checks**: Validate database integrity and performance
 - **Auto-initialization**: Seamless ChromaDB setup and configuration
+- **Real Backup System**: Complete tar.gz compression with success notifications
 
 ### 🏷️ **Enhanced Tag Management**
 - **Multiple Tag Deletion**: Select and delete multiple tags simultaneously
@@ -29,12 +33,20 @@ A professional desktop application for managing and interacting with the **MCP M
 - **API Consistency**: Consistent interface with search functionality
 - **Clear Warnings**: Understand OR vs AND logic for tag operations
 
+### ⏰ **Time-Based Recall System**
+- **Quick Filters**: One-click buttons for [Today] [Yesterday] [Last Week] [Last Month] [Last 3 Months]
+- **Natural Language**: Free-text time expressions like "2 days ago", "last summer"
+- **Smart Processing**: Combines time filtering with semantic search when appropriate
+- **Dedicated Tab**: Separate "Recall by Time" interface for temporal queries
+
 ### 🎨 **User Experience**
 - **Loading Indicators**: Visual feedback during database initialization
 - **Progress Tracking**: Step-by-step status updates during startup
 - **Professional Interface**: Clean, modern Electron-based desktop app
 - **Keyboard Shortcuts**: F12 or Ctrl+Shift+I for developer tools
 - **Responsive Design**: Adaptive layout for different window sizes
+- **Rich Feedback**: Detailed success/error messages with dismissible notifications
+- **Safety Features**: Confirmation dialogs for destructive operations
 
 ## 🚀 Quick Start
 
@@ -159,21 +171,31 @@ Ensure your MCP Memory Service is properly configured in your Claude Desktop con
 1. Navigate to the **Search Memories** tab
 2. Enter your search query
 3. Click **Search** to find relevant memories
-4. Results show content, tags, and relevance scores
+4. Results show content, tags, similarity scores, and individual delete buttons (🗑️)
+5. Click the delete button on any memory for individual deletion with confirmation
+
+### Time-Based Recall
+1. Navigate to the **Recall by Time** tab
+2. **Quick Filters**: Click predefined buttons ([Today] [Yesterday] [Last Week] [Last Month] [Last 3 Months])
+3. **Free Text**: Enter custom time expressions like "2 days ago", "last summer", "this morning"
+4. Click **Recall** to find memories from that time period
+5. Results include individual delete buttons and similarity scores when applicable
 
 ### Managing Tags
 1. Navigate to the **Tag Management** tab
 2. Enter tags one by one in the input field and press Enter or click "Add Tag"
 3. Selected tags appear as visual chips with remove (×) buttons
 4. Remove unwanted tags by clicking the × on each chip
-5. Click **Delete Tags** to remove all memories containing any of the selected tags
+5. Click **Delete [N] Tags** to remove all memories containing any of the selected tags
 6. Use **Clear Selection** to remove all selected tags without deleting
 7. ⚠️ **Warning**: Uses OR logic - memories with ANY selected tag will be deleted
 
-### Dashboard Operations
-- **Refresh Stats**: Click the settings icon to reload statistics
+### Database Operations
+- **Refresh Stats**: Click the settings icon to reload statistics and see real query times
 - **Optimize Database**: Click the refresh icon to optimize performance
-- **Create Backup**: Click the save icon to create a timestamped backup
+- **Create Backup**: Click the save icon to create a timestamped backup with detailed feedback
+  - Success message shows: file path, size in MB, timestamp, and dismissible notification
+  - Example: "✅ Backup created successfully! 📁 Location: /path/to/backup_20250607_143025.tar.gz 📊 Size: 2.4 MB"
 
 ## 🏗️ Technical Architecture
 
@@ -247,8 +269,33 @@ Creates optimized production build in `dist/` directory.
 ### Performance Notes
 - **Initial startup**: 10-30 seconds for ChromaDB initialization
 - **Memory operations**: 2-10 seconds depending on database size
-- **Stats retrieval**: 3-5 seconds for large databases
-- **Search operations**: 1-3 seconds with real-time results
+- **Stats retrieval**: 3-5 seconds for large databases with real query time tracking
+- **Search operations**: 1-3 seconds with real-time results and accuracy metrics
+- **Recall operations**: 1-3 seconds for time-based filtering
+- **Backup creation**: 2-10 seconds creating compressed tar.gz files
+- **Individual deletion**: Near-instant with confirmation dialogs
+
+### New Features Troubleshooting (v1.2.0)
+
+**Individual delete buttons not appearing**
+- Ensure memories have valid IDs (refresh search results if needed)
+- Check that you're using the latest version of the memory service
+- Individual deletion requires memory service v1.2.0+
+
+**Time-based recall not working**
+- Try simpler expressions first: "today", "yesterday", "last week"
+- Complex time expressions may require exact phrasing
+- Check console logs (F12) for time parsing errors
+
+**Backup feedback not showing**
+- Verify backup directory has write permissions
+- Check that backup path environment variable is set correctly
+- Large databases may take longer to backup (progress is shown)
+
+**Query times still showing 0**
+- Perform a few searches to populate the average calculation
+- Query time tracking requires at least one search operation
+- Restart the application if metrics don't update
 
 ### Getting Help
 1. Check the console logs (F12) for detailed error messages
@@ -286,7 +333,17 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📈 Version History
 
-### v1.1.0 (Current) - Enhanced Tag Management
+### v1.2.0 (Current) - UX Enhancements & Issue #2 Resolution
+- ✅ **Real Query Time Tracking**: Displays actual average query times (1-3 seconds) instead of 0
+- ✅ **Complete Backup System**: Real tar.gz backups with detailed feedback (path, size, timestamp)  
+- ✅ **Individual Memory Deletion**: Delete buttons (🗑️) on each memory with confirmation dialogs
+- ✅ **Time-Based Recall**: New "Recall by Time" tab with quick filter buttons and natural language
+- ✅ **4-Tab Interface**: Store → Search → Recall → Tag Management for better organization
+- ✅ **Enhanced UX**: Rich notifications, dismissible success messages, and real-time updates
+- ✅ **Safety Features**: Confirmation dialogs for destructive operations
+- ✅ **Performance Metrics**: Real query time measurement and averaging system
+
+### v1.1.0 - Enhanced Tag Management (Issue #5 Resolution)  
 - ✅ **Multiple Tag Deletion**: Select and delete multiple tags simultaneously
 - ✅ **Visual Tag Interface**: Interactive tag chips with add/remove functionality  
 - ✅ **Enhanced UX**: Consistent interface with search functionality
@@ -307,9 +364,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Performance Characteristics
 - **Memory capacity**: Supports thousands of memories with semantic search
-- **Search speed**: 1-3 seconds for semantic queries
+- **Search speed**: 1-3 seconds for semantic queries (now accurately tracked)
+- **Recall speed**: 1-3 seconds for time-based queries with real metrics
 - **Database size**: Scales efficiently with ChromaDB vector storage
 - **Startup time**: 10-30 seconds initial, 2-5 seconds subsequent
+- **Backup creation**: 2-10 seconds depending on database size
 
 ---
 

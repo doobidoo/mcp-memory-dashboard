@@ -42,10 +42,21 @@ export interface MemoryAPI {
   retrieve_memory(query: string, n_results?: number): Promise<MemoryResponse>;
   search_by_tag(tags: string[]): Promise<MemoryResponse>;
   delete_by_tag(tagOrTags: string | string[]): Promise<void>;
+  delete_memory(memory_id: string): Promise<{status: string; message: string}>;
+  recall_memory(query: string, n_results?: number): Promise<MemoryResponse>;
   check_database_health(): Promise<DatabaseHealth>;
   get_stats(): Promise<DatabaseStats>;
   optimize_db(): Promise<any>;
-  create_backup(): Promise<any>;
+  create_backup(): Promise<BackupResponse>;
+}
+
+export interface BackupResponse {
+  status: string;
+  message: string;
+  backup_path?: string;
+  backup_filename?: string;
+  backup_size_mb?: number;
+  timestamp?: string;
 }
 
 export interface DashboardResponse {
