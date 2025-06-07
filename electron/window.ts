@@ -124,7 +124,8 @@ export function createWindow() {
 
         console.log('Loading URL in window:', url);
         await win.loadURL(url);
-        win.webContents.openDevTools();
+        // Developer tools removed for cleaner startup - press F12 to open if needed
+        // win.webContents.openDevTools();
       } catch (err: unknown) {
         const error = err instanceof Error ? err : new Error(String(err));
         console.error('Development server connection error:', error);
@@ -140,12 +141,23 @@ export function createWindow() {
     console.log('Running in production mode');
     const indexPath = path.join(__dirname, '../index.html');
     console.log('Loading file:', indexPath);
-    win.webContents.openDevTools();  // Add this line to show DevTools in production
+    // Developer tools removed for cleaner startup - press F12 to open if needed
+    // win.webContents.openDevTools();
     win.loadFile(indexPath);
   }
 
   win.on('closed', () => {
     console.log('Window closed');
     win.destroy();
+  });
+
+  // Add keyboard shortcut to toggle developer tools
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+      win.webContents.toggleDevTools();
+    }
+    if (input.key === 'F12') {
+      win.webContents.toggleDevTools();
+    }
   });
 }

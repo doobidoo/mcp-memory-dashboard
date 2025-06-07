@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  DatabaseHealth, 
-  DatabaseStats, 
-  MemoryResponse, 
+import {
+  DatabaseHealth,
+  DatabaseStats,
+  MemoryResponse,
   Memory,
   MemoryAPI,
-  MemoryMetadata 
+  MemoryMetadata
 } from './types';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/card';
-import { 
-  Save, Search, Tag, Database, Settings, 
-  RefreshCw, Trash2 
+import {
+  Save,
+  Search,
+  Tag,
+  Database,
+  Settings,
+  RefreshCw,
+  Trash2,
+  AlertCircle
 } from 'lucide-react';
 
 interface MemoryDashboardProps {
@@ -34,6 +40,9 @@ interface MemoryDashboardProps {
 const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [initializationStatus, setInitializationStatus] = useState('Starting Memory Service...');
   const [error, setError] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState('store');
   const [content, setContent] = useState('');
@@ -46,30 +55,84 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
     avgQueryTime: 0
   });
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [serviceStatus, setServiceStatus] = useState<'unknown' | 'healthy' | 'unhealthy'>('unknown');
 
   useEffect(() => {
-    loadStats();
+    const initializeApp = async () => {
+      setInitializing(true);
+      setInitializationStatus('Connecting to Memory Service...');
+      
+      // Add a small delay to show the initialization message
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      try {
+        setInitializationStatus('Loading database statistics...');
+        await loadStats();
+        setInitializationStatus('Memory Service ready!');
+        
+        // Show ready status briefly before hiding initialization
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setInitializing(false);
+      } catch (error) {
+        console.error('Failed to initialize app:', error);
+        setInitializationStatus('Failed to initialize - retrying...');
+        
+        // Retry after a delay
+        setTimeout(() => {
+          initializeApp();
+        }, 2000);
+      }
+    };
+
+    initializeApp();
   }, []);
 
   const loadStats = async () => {
+    setStatsLoading(true);
     try {
       if (!window.electronAPI?.memory) {
         throw new Error('Memory API not available');
       }
 
+      console.log('Loading dashboard stats...');
+      setInitializationStatus('Checking database health...');
+      
       const [healthData, dbStats] = await Promise.all([
         window.electronAPI.memory.check_database_health(),
-        window.electronAPI.memory.get_stats()
+        (async () => {
+          setInitializationStatus('Loading memory statistics...');
+          return window.electronAPI.memory.get_stats();
+        })()
       ]);
-      
+
+      console.log('Health data received:', healthData);
+      console.log('Stats data received:', dbStats);
+
       setStats({
         totalMemories: dbStats.total_memories || 0,
         tagsCount: dbStats.unique_tags || 0,
         dbHealth: healthData.health || 100,
         avgQueryTime: healthData.avg_query_time || 0
       });
+
+      // Update service status based on health
+      setServiceStatus(
+        healthData.health >= 90
+          ? 'healthy'
+          : healthData.health > 0
+          ? 'unhealthy'
+          : 'unknown'
+      );
+
+      setError(null);
+      setInitializationStatus('Statistics loaded successfully!');
     } catch (err) {
-      setError('Failed to load statistics');
+      console.error('Failed to load statistics:', err);
+      setError('Failed to load statistics: ' + (err instanceof Error ? err.message : String(err)));
+      setServiceStatus('unhealthy');
+      setInitializationStatus('Failed to load statistics');
+    } finally {
+      setStatsLoading(false);
     }
   };
 
@@ -94,7 +157,7 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       setContent('');
       setTags('');
       setError(null);
-      await loadStats();
+      await loadStats(); // Refresh stats after storing
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       setError('Failed to store memory: ' + err.message);
@@ -115,11 +178,17 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
         throw new Error('Memory API not available');
       }
 
+      console.log('Searching with query:', searchQuery.trim());
       const response = await window.electronAPI.memory.retrieve_memory(searchQuery.trim(), 5);
-      setMemories(response.memories || []);
+      console.log('Search response:', response);
+
+      // Handle the response format from the new dashboard endpoint
+      const memoriesArray = response.memories || [];
+      setMemories(memoriesArray);
       setError(null);
     } catch (searchError) {
       const err = searchError instanceof Error ? searchError : new Error(String(searchError));
+      console.error('Search failed:', err);
       setError('Search failed: ' + err.message);
     } finally {
       setLoading(false);
@@ -133,9 +202,15 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
         throw new Error('Memory API not available');
       }
 
-      await window.electronAPI.memory.optimize_db();
-      await loadStats();
-      setError(null);
+      const result = await window.electronAPI.memory.optimize_db();
+      console.log('Optimize result:', result);
+
+      if (result.status === 'not_implemented') {
+        setError('Database optimization feature is not yet implemented');
+      } else {
+        await loadStats();
+        setError(null);
+      }
     } catch (err) {
       setError('Failed to optimize database performance: ' + (err as Error).message);
     } finally {
@@ -150,8 +225,14 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
         throw new Error('Memory API not available');
       }
 
-      await window.electronAPI.memory.create_backup();
-      setError(null);
+      const result = await window.electronAPI.memory.create_backup();
+      console.log('Backup result:', result);
+
+      if (result.status === 'not_implemented') {
+        setError('Database backup feature is not yet implemented');
+      } else {
+        setError(null);
+      }
     } catch (err) {
       setError('Failed to create backup: ' + (err as Error).message);
     } finally {
@@ -182,14 +263,80 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
     }
   };
 
+  // Service status indicator
+  const getStatusColor = () => {
+    if (statsLoading) return 'text-blue-600';
+    switch (serviceStatus) {
+      case 'healthy':
+        return 'text-green-600';
+      case 'unhealthy':
+        return 'text-yellow-600';
+      default:
+        return 'text-red-600';
+    }
+  };
+
+  const getStatusIcon = () => {
+    if (statsLoading) return <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />;
+    switch (serviceStatus) {
+      case 'healthy':
+        return <Database className="w-5 h-5 text-green-600" />;
+      case 'unhealthy':
+        return <AlertCircle className="w-5 h-5 text-yellow-600" />;
+      default:
+        return <AlertCircle className="w-5 h-5 text-red-600" />;
+    }
+  };
+
+  const getStatusText = () => {
+    if (statsLoading) return 'loading...';
+    return serviceStatus;
+  };
+
   return (
     <div className="w-full max-w-6xl mx-auto p-4">
+      {/* Initialization Overlay */}
+      {initializing && (
+        <div className="fixed inset-0 bg-gray-50 bg-opacity-95 flex items-center justify-center z-50">
+          <Card className="w-96">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RefreshCw className="w-5 h-5 animate-spin" />
+                Initializing Memory Service
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="text-sm text-gray-600">
+                  {initializationStatus}
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className={`bg-blue-600 h-2 rounded-full transition-all duration-500 ${
+                    initializationStatus.includes('Connecting') ? 'w-1/4' :
+                    initializationStatus.includes('Loading database') ? 'w-1/2' :
+                    initializationStatus.includes('Loading memory') ? 'w-3/4' :
+                    initializationStatus.includes('ready') || initializationStatus.includes('successfully') ? 'w-full' :
+                    'w-1/8'
+                  }`}></div>
+                </div>
+                <div className="text-xs text-gray-500">
+                  Please wait while we initialize the database and load your memory statistics...
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle className="flex items-center gap-2">
-              <Database className="w-6 h-6" />
+              {getStatusIcon()}
               Memory Service Dashboard
+              <span className={`text-sm font-normal ${getStatusColor()}`}>
+                ({getStatusText()})
+              </span>
             </CardTitle>
             <div className="flex gap-2">
               <button
@@ -207,6 +354,14 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
                 title="Optimize Database"
               >
                 <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+              <button
+                onClick={loadStats}
+                className="p-2 rounded-lg hover:bg-gray-100"
+                disabled={loading || statsLoading}
+                title="Refresh Stats"
+              >
+                <Settings className={`w-5 h-5 ${statsLoading ? 'animate-spin' : ''}`} />
               </button>
             </div>
           </div>
@@ -233,14 +388,18 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
           </div>
 
           {error && (
-            <div className="bg-blue-100 p-4 rounded-md mb-4">
-              <p>{error}</p>
+            <div className="bg-blue-100 border border-blue-200 text-blue-800 p-4 rounded-md mb-4 flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium">Notice</p>
+                <p className="text-sm">{error}</p>
+              </div>
             </div>
           )}
 
           {selectedTab === 'store' && (
             <div className="space-y-4">
-              <textarea 
+              <textarea
                 className="w-full p-2 border rounded-md h-32"
                 placeholder="Enter memory content..."
                 value={content}
@@ -248,15 +407,15 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
                 disabled={loading}
               />
               <div className="flex gap-2">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   className="flex-1 p-2 border rounded-md"
                   placeholder="Add tags (comma separated)"
                   value={tags}
                   onChange={(e) => setTags(e.target.value)}
                   disabled={loading}
                 />
-                <button 
+                <button
                   onClick={handleStoreMemory}
                   disabled={loading}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md flex items-center gap-2 disabled:bg-blue-300"
@@ -271,15 +430,15 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
           {selectedTab === 'search' && (
             <div className="space-y-4">
               <div className="flex gap-2">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   className="flex-1 p-2 border rounded-md"
                   placeholder="Search memories..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   disabled={loading}
                 />
-                <button 
+                <button
                   onClick={handleSearch}
                   disabled={loading}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md flex items-center gap-2 disabled:bg-blue-300"
@@ -289,43 +448,50 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
                 </button>
               </div>
               <div className="space-y-2">
+                {memories.length === 0 && searchQuery && (
+                  <div className="text-gray-500 text-center py-4">
+                    No memories found for "{searchQuery}"
+                  </div>
+                )}
                 {memories.map((memory, index) => {
                   const timestamp = memory.metadata?.timestamp || new Date().toISOString();
                   const formattedDate = new Date(timestamp).toLocaleString();
-                  
+
                   return (
-                    <Card key={index} className="hover:shadow-lg transition-shadow">
+                    <Card key={memory.id || index} className="hover:shadow-lg transition-shadow">
                       <CardContent className="p-4">
                         <div className="flex justify-between items-start mb-2">
-                          <div className="text-sm text-gray-500">
-                            {formattedDate}
-                          </div>
+                          <div className="text-sm text-gray-500">{formattedDate}</div>
                           {memory.similarity && (
                             <div className="text-sm text-gray-500">
                               Similarity: {(memory.similarity * 100).toFixed(1)}%
                             </div>
                           )}
                         </div>
-                        
+
                         <div className="space-y-2">
                           <div className="text-gray-800">
                             {memory.content.length > 200 ? (
                               <>
-                                {expandedIndex === index ? memory.content : `${memory.content.slice(0, 200)}...`}
-                                <button 
+                                {expandedIndex === index
+                                  ? memory.content
+                                  : `${memory.content.slice(0, 200)}...`}
+                                <button
                                   className="text-blue-600 hover:underline ml-2"
                                   onClick={() => setExpandedIndex(expandedIndex === index ? null : index)}
                                 >
                                   {expandedIndex === index ? 'Show less' : 'Show more'}
                                 </button>
                               </>
-                            ) : memory.content}
+                            ) : (
+                              memory.content
+                            )}
                           </div>
-                          
+
                           {memory.tags && memory.tags.length > 0 && (
                             <div className="flex flex-wrap gap-2 mt-2">
                               {memory.tags.map((tag, tagIndex) => (
-                                <span 
+                                <span
                                   key={tagIndex}
                                   className="px-2 py-1 rounded-md text-sm"
                                   style={{
@@ -350,15 +516,15 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
           {selectedTab === 'tags' && (
             <div className="space-y-4">
               <div className="flex gap-2">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   className="flex-1 p-2 border rounded-md"
                   placeholder="Enter tag to delete..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   disabled={loading}
                 />
-                <button 
+                <button
                   onClick={() => handleDeleteTag(searchQuery)}
                   disabled={loading || !searchQuery.trim()}
                   className="px-4 py-2 bg-red-600 text-white rounded-md flex items-center gap-2 disabled:bg-red-300"
@@ -366,6 +532,11 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
                   <Trash2 className="w-4 h-4" />
                   Delete Tag
                 </button>
+              </div>
+              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded-md">
+                <p className="text-sm">
+                  <strong>Warning:</strong> This will permanently delete all memories with the specified tag.
+                </p>
               </div>
             </div>
           )}
@@ -375,25 +546,49 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       <div className="grid grid-cols-4 gap-4 mt-6">
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{stats.totalMemories}</div>
+            <div className="text-2xl font-bold">
+              {statsLoading ? (
+                <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+              ) : (
+                stats.totalMemories
+              )}
+            </div>
             <div className="text-sm text-gray-500">Total Memories</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{stats.tagsCount}</div>
+            <div className="text-2xl font-bold">
+              {statsLoading ? (
+                <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+              ) : (
+                stats.tagsCount
+              )}
+            </div>
             <div className="text-sm text-gray-500">Unique Tags</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{stats.dbHealth}%</div>
+            <div className="text-2xl font-bold">
+              {statsLoading ? (
+                <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+              ) : (
+                `${stats.dbHealth}%`
+              )}
+            </div>
             <div className="text-sm text-gray-500">Health</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{stats.avgQueryTime}</div>
+            <div className="text-2xl font-bold">
+              {statsLoading ? (
+                <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+              ) : (
+                stats.avgQueryTime
+              )}
+            </div>
             <div className="text-sm text-gray-500">Avg Query (ms)</div>
           </CardContent>
         </Card>

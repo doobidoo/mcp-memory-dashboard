@@ -1,10 +1,4 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import fs from 'fs';
-import { promisify } from 'util';
-import type { MemoryService } from '../src/services/memory';
-
-const readFileAsync = promisify(fs.readFile);
-const existsAsync = promisify(fs.exists);
 
 // Get environment variables from renderer process arguments
 const getEnvVar = (name: string): string | undefined => {
@@ -12,19 +6,23 @@ const getEnvVar = (name: string): string | undefined => {
   return arg ? arg.split('=')[1] : undefined;
 };
 
+// Use VITE_ environment variables which are available
 const ENV = {
-  MEMORY_SERVICE_PATH: getEnvVar('memory-service-path'),
-  MEMORY_CHROMA_PATH: process.env.MCP_MEMORY_CHROMA_PATH,
-  MEMORY_BACKUPS_PATH: process.env.MCP_MEMORY_BACKUPS_PATH,
-  CLAUDE_CONFIG_PATH: getEnvVar('claude-config-path')
+  MEMORY_SERVICE_PATH: getEnvVar('memory-service-path') || process.env.VITE_MEMORY_SERVICE_PATH,
+  MEMORY_CHROMA_PATH: getEnvVar('memory-chroma-path') || process.env.VITE_MEMORY_CHROMA_PATH,
+  MEMORY_BACKUPS_PATH: getEnvVar('memory-backups-path') || process.env.VITE_MEMORY_BACKUPS_PATH,
+  CLAUDE_CONFIG_PATH: getEnvVar('claude-config-path') || process.env.VITE_CLAUDE_CONFIG_PATH
 };
 
 console.log('Preload script starting with:', {
   ENV,
   processEnv: {
-    MCP_MEMORY_CHROMA_PATH: process.env.MCP_MEMORY_CHROMA_PATH,
-    MCP_MEMORY_BACKUPS_PATH: process.env.MCP_MEMORY_BACKUPS_PATH
-  }
+    VITE_MEMORY_CHROMA_PATH: process.env.VITE_MEMORY_CHROMA_PATH,
+    VITE_MEMORY_BACKUPS_PATH: process.env.VITE_MEMORY_BACKUPS_PATH,
+    VITE_CLAUDE_CONFIG_PATH: process.env.VITE_CLAUDE_CONFIG_PATH,
+    VITE_MEMORY_SERVICE_PATH: process.env.VITE_MEMORY_SERVICE_PATH
+  },
+  argv: process.argv
 });
 
 interface MCPToolRequest {
@@ -33,11 +31,23 @@ interface MCPToolRequest {
   arguments: Record<string, unknown>;
 }
 
+interface DashboardResponse {
+  memories?: any[];
+  error?: string;
+  status?: string;
+  message?: string;
+  total_memories?: number;
+  unique_tags?: number;
+  health?: number;
+  avg_query_time?: number;
+}
+
 // Create MCP client for memory service
 const mcpClient = {
   use_mcp_tool: async ({ server_name, tool_name, arguments: args }: MCPToolRequest) => {
     try {
-      console.log('MCP tool request environment:', process.env);
+      console.log(`Calling MCP tool: ${server_name}/${tool_name}`, { args, env: ENV });
+      
       if (!ENV.CLAUDE_CONFIG_PATH) {
         throw new Error('Claude config path not available');
       }
@@ -45,124 +55,298 @@ const mcpClient = {
         throw new Error('Memory Chroma DB path not available');
       }
 
-      console.log(`Calling MCP tool: ${server_name}/${tool_name}`, { args, env: ENV });
       const result = await ipcRenderer.invoke('mcp:use-tool', {
         server_name,
         tool_name,
         arguments: args
       });
       
-      // Log detailed information about the MCP tool call
-      console.log('MCP tool call details:', {
+      console.log('MCP tool call result:', {
         request: { server_name, tool_name, args },
-        result,
-        env: { MCP_MEMORY_CHROMA_PATH: process.env.MCP_MEMORY_CHROMA_PATH }
+        result
       });
       
       return result;
     } catch (error) {
       console.error(`MCP tool error (${server_name}/${tool_name}):`, error);
-      console.error('Error details:', error instanceof Error ? error.stack : error);
       throw new Error(`MCP tool error (${server_name}/${tool_name}): ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 };
 
-// Initialize memory service with error handling
-let memoryService: MemoryService | null = null;
+// Memory service implementation - inline to avoid require() issues in sandbox
+const memoryService = {
+  async store_memory(content: string, metadata?: any) {
+    console.log('Storing memory:', { content, metadata });
+    return await mcpClient.use_mcp_tool({
+      server_name: "memory",
+      tool_name: "store_memory",
+      arguments: { content, metadata }
+    });
+  },
 
-// Enhanced memory service initialization
-try {
-  console.log('=== Starting Memory Service Initialization ===');
-  const envVars = {
-    MEMORY_SERVICE_PATH: ENV.MEMORY_SERVICE_PATH,
-    MEMORY_CHROMA_PATH: ENV.MEMORY_CHROMA_PATH,
-    MEMORY_BACKUPS_PATH: ENV.MEMORY_BACKUPS_PATH,
-    CLAUDE_CONFIG_PATH: ENV.CLAUDE_CONFIG_PATH
-  };
-  
-  Object.entries(envVars).forEach(([key, value]) => {
-    if (!value) {
-      throw new Error(`Required environment variable ${key} is not set`);
+  async retrieve_memory(query: string, n_results = 5) {
+    try {
+      console.log('Retrieving memory using dashboard endpoint:', { query, n_results });
+      
+      const response = await mcpClient.use_mcp_tool({
+        server_name: "memory",
+        tool_name: "dashboard_retrieve_memory",
+        arguments: { query, n_results }
+      });
+
+      // Parse MCP response format: {content: [{type: "text", text: "JSON"}]}
+      let jsonText: string;
+      if (response && response.content && response.content[0] && response.content[0].text) {
+        jsonText = response.content[0].text;
+      } else if (typeof response === 'string') {
+        jsonText = response;
+      } else {
+        jsonText = JSON.stringify(response);
+      }
+
+      const parsedResponse: DashboardResponse = JSON.parse(jsonText);
+
+      if (parsedResponse.error) {
+        throw new Error(parsedResponse.error);
+      }
+
+      return {
+        memories: parsedResponse.memories || []
+      };
+    } catch (error) {
+      console.error('Error retrieving memory:', error);
+      throw error;
     }
-    console.log(`${key}: ${value}`);
-  });
+  },
 
-  const { MemoryService } = require('../src/services/memory');
-  memoryService = new MemoryService(mcpClient);
-  
-  // Immediate health check
-  mcpClient.use_mcp_tool({
-    server_name: "memory",
-    tool_name: "check_database_health",
-    arguments: {}
-  }).then(result => {
-    console.log('Memory service initialized successfully:', result);
+  async search_by_tag(tags: string[]) {
+    try {
+      console.log('Searching by tags using dashboard endpoint:', tags);
+      
+      const response = await mcpClient.use_mcp_tool({
+        server_name: "memory",
+        tool_name: "dashboard_search_by_tag",
+        arguments: { tags }
+      });
+
+      // Parse MCP response format: {content: [{type: "text", text: "JSON"}]}
+      let jsonText: string;
+      if (response && response.content && response.content[0] && response.content[0].text) {
+        jsonText = response.content[0].text;
+      } else if (typeof response === 'string') {
+        jsonText = response;
+      } else {
+        jsonText = JSON.stringify(response);
+      }
+
+      const parsedResponse: DashboardResponse = JSON.parse(jsonText);
+
+      if (parsedResponse.error) {
+        throw new Error(parsedResponse.error);
+      }
+
+      return {
+        memories: parsedResponse.memories || []
+      };
+    } catch (error) {
+      console.error('Error searching by tag:', error);
+      throw error;
+    }
+  },
+
+  async delete_by_tag(tag: string) {
+    console.log('Deleting by tag:', tag);
+    return await mcpClient.use_mcp_tool({
+      server_name: "memory",
+      tool_name: "delete_by_tag",
+      arguments: { tag }
+    });
+  },
+
+  async check_database_health() {
+    try {
+      console.log('Checking database health using dashboard endpoint');
+      
+      const response = await mcpClient.use_mcp_tool({
+        server_name: "memory",
+        tool_name: "dashboard_check_health",
+        arguments: {}
+      });
+
+      // Parse MCP response format: {content: [{type: "text", text: "JSON"}]}
+      let jsonText: string;
+      if (response && response.content && response.content[0] && response.content[0].text) {
+        jsonText = response.content[0].text;
+      } else if (typeof response === 'string') {
+        jsonText = response;
+      } else {
+        jsonText = JSON.stringify(response);
+      }
+
+      const healthData: DashboardResponse = JSON.parse(jsonText);
+
+      return {
+        health: healthData.health || 0,
+        avg_query_time: healthData.avg_query_time || 0,
+        status: healthData.status || 'unknown'
+      };
+    } catch (error) {
+      console.error('Error checking database health:', error);
+      throw error;
+    }
+  },
+
+  async get_stats() {
+    try {
+      console.log('Getting stats using dashboard endpoint');
+      
+      const response = await mcpClient.use_mcp_tool({
+        server_name: "memory",
+        tool_name: "dashboard_get_stats",
+        arguments: {}
+      });
+
+      // Parse MCP response format: {content: [{type: "text", text: "JSON"}]}
+      let jsonText: string;
+      if (response && response.content && response.content[0] && response.content[0].text) {
+        jsonText = response.content[0].text;
+      } else if (typeof response === 'string') {
+        jsonText = response;
+      } else {
+        jsonText = JSON.stringify(response);
+      }
+
+      const statsData: DashboardResponse = JSON.parse(jsonText);
+
+      if (statsData.error) {
+        console.warn('Stats error:', statsData.error);
+        return {
+          total_memories: 0,
+          unique_tags: 0
+        };
+      }
+
+      return {
+        total_memories: statsData.total_memories || 0,
+        unique_tags: statsData.unique_tags || 0
+      };
+    } catch (error) {
+      console.error('Error getting stats:', error);
+      throw error;
+    }
+  },
+
+  async optimize_db() {
+    try {
+      console.log('Optimizing database using dashboard endpoint');
+      
+      const response = await mcpClient.use_mcp_tool({
+        server_name: "memory",
+        tool_name: "dashboard_optimize_db",
+        arguments: {}
+      });
+
+      // Parse MCP response format: {content: [{type: "text", text: "JSON"}]}
+      let jsonText: string;
+      if (response && response.content && response.content[0] && response.content[0].text) {
+        jsonText = response.content[0].text;
+      } else if (typeof response === 'string') {
+        jsonText = response;
+      } else {
+        jsonText = JSON.stringify(response);
+      }
+
+      const result: DashboardResponse = JSON.parse(jsonText);
+
+      if (result.status === 'not_implemented') {
+        console.info('Database optimization not implemented:', result.message);
+        return { message: result.message, status: result.status };
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error optimizing database:', error);
+      throw error;
+    }
+  },
+
+  async create_backup() {
+    try {
+      console.log('Creating backup using dashboard endpoint');
+      
+      const response = await mcpClient.use_mcp_tool({
+        server_name: "memory",
+        tool_name: "dashboard_create_backup",
+        arguments: {}
+      });
+
+      // Parse MCP response format: {content: [{type: "text", text: "JSON"}]}
+      let jsonText: string;
+      if (response && response.content && response.content[0] && response.content[0].text) {
+        jsonText = response.content[0].text;
+      } else if (typeof response === 'string') {
+        jsonText = response;
+      } else {
+        jsonText = JSON.stringify(response);
+      }
+
+      const result: DashboardResponse = JSON.parse(jsonText);
+
+      if (result.status === 'not_implemented') {
+        console.info('Database backup not implemented:', result.message);
+        return { message: result.message, status: result.status };
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error creating backup:', error);
+      throw error;
+    }
+  }
+};
+
+// Test connection on initialization
+const testConnection = async () => {
+  try {
+    console.log('=== Testing Memory Service Connection ===');
+    
+    // Validate environment variables
+    const requiredEnvVars = ['MEMORY_SERVICE_PATH', 'MEMORY_CHROMA_PATH', 'MEMORY_BACKUPS_PATH', 'CLAUDE_CONFIG_PATH'];
+    const missingVars = requiredEnvVars.filter(varName => !ENV[varName as keyof typeof ENV]);
+    
+    if (missingVars.length > 0) {
+      throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+    }
+
+    // Test health check
+    const healthResult = await memoryService.check_database_health();
+    console.log('Memory service health check successful:', healthResult);
+    
     ipcRenderer.send('service-status', { memory: true });
-  }).catch(error => {
-    console.error('Memory service initialization failed:', error);
+    return true;
+  } catch (error) {
+    console.error('Memory service connection test failed:', error);
+    ipcRenderer.send('service-error', { 
+      service: 'memory', 
+      error: error instanceof Error ? error.message : String(error)
+    });
     ipcRenderer.send('service-status', { memory: false });
-    throw error;
-  });
+    return false;
+  }
+};
 
-} catch (error) {
-  console.error('Memory service initialization error:', error);
-  ipcRenderer.send('service-error', { 
-    service: 'memory', 
-    error: error instanceof Error ? error.message : String(error)
-  });
-}
-
-// Check if memory service is available
-if (!memoryService) {
-  console.error('Memory service not available');
-  ipcRenderer.send('service-status', { memory: false });
-} else {
-  console.log('Memory service is available');
-  ipcRenderer.send('service-status', { memory: true });
-}
+// Perform initial connection test
+testConnection();
 
 // Expose APIs to renderer
 contextBridge.exposeInMainWorld('electronAPI', {
-  memory: memoryService ? {
-    store_memory: async (content: string, metadata?: any) => {
-      console.log('Storing memory:', { content, metadata });
-      return memoryService!.store_memory({ content, metadata });
-    },
-    retrieve_memory: async (query: string, n_results?: number) => {
-      console.log('Retrieving memory:', { query, n_results });
-      return memoryService!.retrieve_memory({ query, n_results });
-    },
-    search_by_tag: async (tags: string[]) => {
-      console.log('Searching by tags:', tags);
-      return memoryService!.search_by_tag({ tags });
-    },
-    delete_by_tag: async (tag: string) => {
-      console.log('Deleting by tag:', tag);
-      return memoryService!.delete_by_tag({ tag });
-    },
-    check_database_health: async () => {
-      console.log('Checking database health');
-      return memoryService!.check_database_health();
-    },
-    get_stats: async () => {
-      console.log('Getting stats');
-      return memoryService!.get_stats();
-    },
-    optimize_db: async () => {
-      console.log('Optimizing database');
-      return memoryService!.optimize_db();
-    },
-    create_backup: async () => {
-      console.log('Creating backup');
-      return memoryService!.create_backup();
-    }
-  } : null,
+  memory: memoryService,
   fs: {
     readFile: async (path: string, options?: { encoding?: BufferEncoding }) => {
       console.log('readFile called with path:', path);
       try {
-        const result = await readFileAsync(path, options);
+        const result = await ipcRenderer.invoke('fs:readFile', { path, options });
         console.log('readFile successful');
         return result;
       } catch (error) {
@@ -173,7 +357,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     exists: async (path: string) => {
       console.log('exists called with path:', path);
       try {
-        const exists = await existsAsync(path);
+        const exists = await ipcRenderer.invoke('fs:exists', { path });
         console.log('exists check result:', exists);
         return exists;
       } catch (error) {

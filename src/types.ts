@@ -1,6 +1,7 @@
 export interface DatabaseHealth {
   health: number;
   avg_query_time: number;
+  status?: string;
   details?: string;
 }
 
@@ -11,11 +12,14 @@ export interface DatabaseStats {
 }
 
 export interface Memory {
+  id?: string;
   content: string;
   tags?: string[];
   similarity?: number;
   metadata?: {
     timestamp?: string;
+    type?: string;
+    tags?: string[];
     [key: string]: any;
   };
 }
@@ -23,6 +27,7 @@ export interface Memory {
 export interface MemoryResponse {
   memories: Memory[];
   status?: string;
+  error?: string;
 }
 
 export interface MemoryMetadata {
@@ -39,6 +44,17 @@ export interface MemoryAPI {
   delete_by_tag(tag: string): Promise<void>;
   check_database_health(): Promise<DatabaseHealth>;
   get_stats(): Promise<DatabaseStats>;
-  optimize_db(): Promise<void>;
-  create_backup(): Promise<void>;
+  optimize_db(): Promise<any>;
+  create_backup(): Promise<any>;
+}
+
+export interface DashboardResponse {
+  memories?: Memory[];
+  error?: string;
+  status?: string;
+  message?: string;
+  total_memories?: number;
+  unique_tags?: number;
+  health?: number;
+  avg_query_time?: number;
 }

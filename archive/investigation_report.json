@@ -1,0 +1,118 @@
+{
+  "timestamp": "2025-06-07T04:26:11.651Z",
+  "total_tests": 4,
+  "passed_tests": 3,
+  "failed_tests": 1,
+  "all_results": [
+    {
+      "timestamp": "2025-06-07T04:26:11.645Z",
+      "type": "info",
+      "message": "🚀 Starting MCP Memory-Dashboard Integration Investigation"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.647Z",
+      "type": "info",
+      "message": "=========================================================="
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.647Z",
+      "type": "test",
+      "message": "🧪 Testing: Memory Service Path Check"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.647Z",
+      "type": "info",
+      "message": "Path EXISTS: /Users/hkr/Documents/GitHub/mcp-memory-service/.venv/bin/memory"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.647Z",
+      "type": "info",
+      "message": "Path MISSING: /Users/hkr/Documents/GitHub/mcp-memory-service/.venv/Scripts/memory.exe"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.647Z",
+      "type": "info",
+      "message": "Path EXISTS: /Users/hkr/Documents/GitHub/mcp-memory-service/src/mcp_memory_service/server.py"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.648Z",
+      "type": "pass",
+      "message": "✅ PASS: Memory Service Path Check"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.648Z",
+      "type": "test",
+      "message": "🧪 Testing: Memory Service Direct Test"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.650Z",
+      "type": "fail",
+      "message": "❌ FAIL: Memory Service Direct Test - spawn python ENOENT"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.650Z",
+      "type": "test",
+      "message": "🧪 Testing: Claude Desktop Config Check"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.650Z",
+      "type": "info",
+      "message": "Config found: /Users/hkr/Library/Application Support/Claude/claude_desktop_config.json"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.650Z",
+      "type": "info",
+      "message": "Has memory server: true"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.650Z",
+      "type": "info",
+      "message": "Config found: /Users/hkr/Library/Application Support/Claude/claude_desktop_config.json"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.650Z",
+      "type": "info",
+      "message": "Has memory server: true"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.651Z",
+      "type": "info",
+      "message": "Config found: /Users/hkr/Documents/GitHub/mcp-memory-service/claude_desktop_config_template.json"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.651Z",
+      "type": "info",
+      "message": "Has memory server: true"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.651Z",
+      "type": "pass",
+      "message": "✅ PASS: Claude Desktop Config Check"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.651Z",
+      "type": "test",
+      "message": "🧪 Testing: Tool Availability Test"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.651Z",
+      "type": "info",
+      "message": "Simulating tool call: dashboard_check_health on memory"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.651Z",
+      "type": "info",
+      "message": "Simulated health result: {\"status\":\"healthy\",\"health\":100,\"avg_query_time\":0}"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.651Z",
+      "type": "pass",
+      "message": "✅ PASS: Tool Availability Test"
+    },
+    {
+      "timestamp": "2025-06-07T04:26:11.651Z",
+      "type": "info",
+      "message": "📊 Generating Investigation Report..."
+    }
+  ]
+}

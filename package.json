@@ -17,6 +17,7 @@
     "start": "npm run build && npm run electron:preview"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "@radix-ui/react-alert-dialog": "^1.0.5",
     "@radix-ui/react-slot": "^1.0.2",
     "class-variance-authority": "^0.7.0",

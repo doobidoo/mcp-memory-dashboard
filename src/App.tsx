@@ -22,7 +22,7 @@ function App() {
               "--directory",
               import.meta.env.VITE_MEMORY_SERVICE_PATH || "/path/to/mcp-memory-service",
               "run",
-              "memory-service"
+              "memory"
             ]
           }
         }
