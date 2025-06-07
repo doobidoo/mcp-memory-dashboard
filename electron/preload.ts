@@ -165,24 +165,39 @@ const memoryService = {
   },
 
   async delete_memory(memory_id: string) {
-    console.log('Deleting individual memory:', memory_id);
-    const response = await mcpClient.use_mcp_tool({
-      server_name: "memory",
-      tool_name: "delete_memory",
-      arguments: { memory_id }
-    });
+    try {
+      console.log('Deleting individual memory using dashboard endpoint:', memory_id);
+      
+      const response = await mcpClient.use_mcp_tool({
+        server_name: "memory",
+        tool_name: "dashboard_delete_memory",
+        arguments: { memory_id }
+      });
 
-    // Parse MCP response format
-    let jsonText: string;
-    if (response && response.content && response.content[0] && response.content[0].text) {
-      jsonText = response.content[0].text;
-    } else if (typeof response === 'string') {
-      jsonText = response;
-    } else {
-      jsonText = JSON.stringify(response);
+      // Parse MCP response format: {content: [{type: "text", text: "JSON"}]}
+      let jsonText: string;
+      if (response && response.content && response.content[0] && response.content[0].text) {
+        jsonText = response.content[0].text;
+      } else if (typeof response === 'string') {
+        jsonText = response;
+      } else {
+        jsonText = JSON.stringify(response);
+      }
+
+      const result: DashboardResponse = JSON.parse(jsonText);
+
+      if (result.status === 'error') {
+        throw new Error(result.message || 'Failed to delete memory');
+      }
+
+      return {
+        status: result.status || 'success',
+        message: result.message || 'Memory deleted successfully'
+      };
+    } catch (error) {
+      console.error('Error deleting memory:', error);
+      throw error;
     }
-
-    return JSON.parse(jsonText);
   },
 
   async recall_memory(query: string, n_results = 5) {
