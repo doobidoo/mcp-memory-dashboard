@@ -18,6 +18,7 @@ import {
   Trash2,
   AlertCircle
 } from 'lucide-react';
+import { VERSION } from './version';
 
 interface MemoryDashboardProps {
   mcpServers: {
@@ -413,7 +414,7 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
           <div className="flex justify-between items-center">
             <CardTitle className="flex items-center gap-2">
               {getStatusIcon()}
-              Memory Service Dashboard v1.2.0
+              Memory Service Dashboard v{VERSION}
               <span className={`text-sm font-normal ${getStatusColor()}`}>
                 ({getStatusText()})
               </span>
