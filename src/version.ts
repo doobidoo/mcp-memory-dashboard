@@ -5,18 +5,18 @@
  * Update this file whenever releasing a new version.
  */
 
-export const VERSION = "1.2.0";
+export const VERSION = "1.2.1";
 
 // Optional: Add semantic version components for advanced use cases
 export const VERSION_PARTS = {
   major: 1,
   minor: 2,
-  patch: 0
+  patch: 1
 } as const;
 
 // Optional: Add additional version metadata
 export const VERSION_INFO = {
   version: VERSION,
   buildDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-  description: "Critical bug fixes and dashboard enhancements"
+  description: "Fixed query time tracking - now shows real average query times"
 } as const;
