@@ -5,18 +5,18 @@
  * Update this file whenever releasing a new version.
  */
 
-export const VERSION = "1.2.3";
+export const VERSION = "1.2.4";
 
 // Optional: Add semantic version components for advanced use cases
 export const VERSION_PARTS = {
   major: 1,
   minor: 2,
-  patch: 3
+  patch: 4
 } as const;
 
 // Optional: Add additional version metadata
 export const VERSION_INFO = {
   version: VERSION,
   buildDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-  description: "Fixed query time tracking - stats now refresh after search/recall operations"
+  description: "Fixed query time timing - added 100ms delay before stats refresh for proper MCP server processing"
 } as const;
