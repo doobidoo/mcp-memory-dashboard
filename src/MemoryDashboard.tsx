@@ -193,6 +193,9 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       const memoriesArray = response.memories || [];
       setMemories(memoriesArray);
       setError(null);
+      
+      // Refresh stats after search to update query times
+      await loadStats();
     } catch (searchError) {
       const err = searchError instanceof Error ? searchError : new Error(String(searchError));
       console.error('Search failed:', err);
@@ -227,6 +230,9 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       if (query) {
         setRecallQuery(query);
       }
+      
+      // Refresh stats after recall to update query times
+      await loadStats();
     } catch (recallError) {
       const err = recallError instanceof Error ? recallError : new Error(String(recallError));
       console.error('Recall failed:', err);
