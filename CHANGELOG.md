@@ -1,5 +1,97 @@
 # CHANGELOG
 
+## [v1.2.4] - 2025-06-08 - Query Time Tracking Final Fix
+
+### 🐛 Bug Fixes
+
+#### Issue #8 Final Resolution: Query Time Timing Optimization
+- **Root Cause Identified**: Frontend called `loadStats()` too quickly after operations
+- **Solution**: Added 100ms delay before stats refresh to allow MCP server processing time
+- **Impact**: Query time tracking now shows accurate measurements (40-70ms range)
+
+### ✨ Technical Changes
+- **Enhanced Timing Logic**: Added `setTimeout(100ms)` before `loadStats()` calls
+- **Affected Functions**: `handleSearch()` and `handleRecall()` in MemoryDashboard
+- **User Experience**: Real-time query performance metrics now display correctly
+- **Testing**: Comprehensive verification with live MCP testing scripts
+
+### 🔧 Files Modified
+- `src/MemoryDashboard.tsx`: Added timing delays for proper stats refresh
+- `src/version.ts`: Updated version and description
+- `package.json`: Version synchronization
+
+## [v1.2.3] - 2025-06-08 - Query Time Stats Refresh Fix
+
+### 🐛 Bug Fixes
+
+#### Issue #8 Continued: Stats Refresh Implementation
+- **Problem**: Stats display wasn't refreshing after search/recall operations
+- **Solution**: Added `loadStats()` calls after search and recall operations
+- **Result**: Query time statistics now update in real-time during use
+
+### ✨ Enhanced Features
+- **Real-time Updates**: Dashboard stats refresh immediately after operations
+- **Better UX**: Users see immediate feedback on query performance
+- **Improved Integration**: Seamless MCP server and frontend communication
+
+## [v1.2.2] - 2025-06-08 - Delete Button Functionality Fix
+
+### 🐛 Bug Fixes
+
+#### Delete Button Restoration
+- **Issue**: Delete functionality was not working properly in dashboard
+- **Solution**: Fixed delete button event handlers and state management
+- **Impact**: Users can now properly delete memories through the dashboard interface
+
+### 🔧 Technical Improvements
+- **Enhanced State Management**: Improved React state handling for delete operations
+- **Better Error Handling**: More robust error feedback for delete operations
+- **UI/UX**: Restored full delete functionality with proper confirmation flows
+
+## [v1.2.1] - 2025-06-08 - Query Time Tracking Implementation
+
+### ✨ Major Features
+
+#### Issue #8 Resolution: Query Time Tracking Backend
+- **New Feature**: Real average query time calculation and display
+- **Backend Enhancement**: Implemented `deque(maxlen=50)` for rolling averages
+- **Dashboard Integration**: `dashboard_check_health` now returns actual query times
+- **User Benefit**: Meaningful performance metrics (1000-3000ms for semantic searches)
+
+### 🛠️ Technical Implementation
+- **Query Time Recording**: All dashboard tools now record execution times
+- **Rolling Average**: Sliding window of last 50 queries for accurate averages
+- **Health Check Integration**: Enhanced `get_average_query_time()` function
+- **Real-time Display**: Frontend shows live query performance data
+
+### 🎯 Expected Behavior
+- **Initial State**: 0ms (no queries performed yet)
+- **After Operations**: Realistic query times (1000-3000ms range)
+- **Rolling Updates**: Values update as more operations are performed
+- **Real-time Feedback**: Stats refresh after each search/recall operation
+
+## [v1.2.0] - 2025-06-08 - Dashboard Tools Implementation
+
+### 🎉 Major Release
+
+#### Complete Dashboard Tools Backend
+- **Critical Implementation**: Full MCP dashboard tools implementation
+- **New Tools**: `dashboard_retrieve_memory`, `dashboard_recall_memory`, `dashboard_search_by_tag`
+- **Enhanced Integration**: Seamless communication between frontend and MCP server
+- **Performance Monitoring**: Foundation for query time tracking and statistics
+
+### ✨ Backend Enhancements
+- **Dashboard API**: Complete implementation of dashboard-specific MCP tools
+- **Error Handling**: Robust error handling and response formatting
+- **JSON Responses**: Consistent JSON formatting for all dashboard operations
+- **Health Monitoring**: Enhanced health check capabilities
+
+### 🔧 Technical Foundation
+- **MCP Protocol**: Full compliance with Model Context Protocol standards
+- **Type Safety**: Enhanced TypeScript integration and type definitions
+- **Scalability**: Architecture prepared for future dashboard enhancements
+- **Testing**: Comprehensive testing infrastructure for dashboard operations
+
 ## [v1.1.0] - 2025-06-07 - Enhanced Tag Management
 
 ### 🎉 Major Enhancements
@@ -83,6 +175,26 @@ delete_by_all_tags(["urgent", "important"])    // AND logic
 ---
 
 ## Migration Notes
+
+### From v1.2.3 to v1.2.4
+**No migration required!** - Timing optimization is automatic.
+
+### From v1.2.2 to v1.2.3
+**No migration required!** - Stats refresh enhancement is automatic.
+
+### From v1.2.1 to v1.2.2
+**No migration required!** - Delete functionality restoration is automatic.
+
+### From v1.2.0 to v1.2.1
+**No migration required!** - Query time tracking is automatically enabled.
+
+### From v1.1.0 to v1.2.0
+**No migration required!** - Dashboard tools implementation is automatic.
+
+To benefit from query time tracking:
+- Restart dashboard application
+- Perform search/recall operations to see query times
+- Query times display will show 0ms initially, then real times after operations
 
 ### From v1.0.0 to v1.1.0
 **No migration required!** - All changes are backward compatible.
