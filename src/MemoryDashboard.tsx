@@ -16,8 +16,10 @@ import {
   Settings,
   RefreshCw,
   Trash2,
-  AlertCircle
-} from 'lucide-react';
+  AlertCircle,
+  Clock
+}
+ from 'lucide-react';
 import { VERSION } from './version';
 
 interface MemoryDashboardProps {
@@ -62,6 +64,10 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [serviceStatus, setServiceStatus] = useState<'unknown' | 'healthy' | 'unhealthy'>('unknown');
+  // NEW: Frontend timing measurement state
+  const [recentQueryTimes, setRecentQueryTimes] = useState<number[]>([]);
+  const [lastQueryTime, setLastQueryTime] = useState<number>(0);
+  const [isTimingQuery, setIsTimingQuery] = useState(false);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -94,6 +100,41 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
     initializeApp();
   }, []);
 
+  // NEW: Function to measure and record query times
+  const measureQueryTime = async <T,>(operation: () => Promise<T>, operationName: string): Promise<T> => {
+    setIsTimingQuery(true);
+    const startTime = performance.now();
+    
+    try {
+      console.log(`⏱️ Starting timing for ${operationName}...`);
+      const result = await operation();
+      const endTime = performance.now();
+      const queryTime = endTime - startTime;
+      
+      console.log(`✅ ${operationName} completed in ${queryTime.toFixed(1)}ms`);
+      
+      // Update recent query times (keep last 10 measurements)
+      setRecentQueryTimes(prev => {
+        const updated = [...prev, queryTime].slice(-10);
+        const avgTime = updated.reduce((sum, time) => sum + time, 0) / updated.length;
+        
+        // Update stats with new average
+        setStats(currentStats => ({
+          ...currentStats,
+          avgQueryTime: avgTime
+        }));
+        
+        console.log(`📊 Updated average query time: ${avgTime.toFixed(1)}ms (from ${updated.length} recent queries)`);
+        return updated;
+      });
+      
+      setLastQueryTime(queryTime);
+      return result;
+    } finally {
+      setIsTimingQuery(false);
+    }
+  };
+
   const loadStats = async () => {
     setStatsLoading(true);
     try {
@@ -115,12 +156,24 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       console.log('Health data received:', healthData);
       console.log('Stats data received:', dbStats);
 
-      setStats({
+      // Parse health data from the nested JSON structure
+      let healthInfo = { health: 100 };
+      if (healthData?.result?.content?.[0]?.text) {
+        try {
+          healthInfo = JSON.parse(healthData.result.content[0].text);
+          console.log('✅ Parsed health info:', healthInfo);
+        } catch (parseError) {
+          console.warn('Failed to parse health data:', parseError);
+        }
+      }
+
+      // Use the stats data directly since it's already parsed by the preload layer
+      setStats(currentStats => ({
         totalMemories: dbStats.total_memories || 0,
         tagsCount: dbStats.unique_tags || 0,
-        dbHealth: healthData.health || 100,
-        avgQueryTime: healthData.avg_query_time || 0
-      });
+        dbHealth: healthInfo.health || 100,
+        avgQueryTime: currentStats.avgQueryTime // Keep frontend-measured timing
+      }));
 
       // Update service status based on health
       setServiceStatus(
@@ -143,6 +196,7 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
     }
   };
 
+
   const handleStoreMemory = async () => {
     if (!content.trim()) {
       setError('Content cannot be empty');
@@ -156,16 +210,21 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       }
 
       const tagArray = tags.split(',').map(tag => tag.trim()).filter(Boolean);
-      await window.electronAPI.memory.store_memory(content.trim(), {
-        tags: tagArray,
-        type: 'user-input'
-      });
-
+      
+      // Measure the store operation time
+      await measureQueryTime(async () => {
+        return window.electronAPI.memory.store_memory(content.trim(), {
+          tags: tagArray,
+          type: 'user-input'
+        });
+      }, 'Store Memory');
       setContent('');
       setTags('');
       setError(null);
+      
+      // Refresh stats after storing
       await new Promise(resolve => setTimeout(resolve, 100));
-      await loadStats(); // Refresh stats after storing
+      await loadStats();
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       setError('Failed to store memory: ' + err.message);
@@ -186,9 +245,14 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
         throw new Error('Memory API not available');
       }
 
-      console.log('Searching with query:', searchQuery.trim());
-      const response = await window.electronAPI.memory.retrieve_memory(searchQuery.trim(), 5);
-      console.log('Search response:', response);
+      console.log('🔍 Searching with query:', searchQuery.trim());
+      
+      // Measure the search operation time
+      const response = await measureQueryTime(async () => {
+        return window.electronAPI.memory.retrieve_memory(searchQuery.trim(), 5);
+      }, 'Search Memory');
+      
+     console.log('Search response:', response);
       console.log('Memories with IDs:', response.memories?.map(m => ({ id: m.id, hasId: !!m.id })));
 
       // Handle the response format from the new dashboard endpoint
@@ -196,7 +260,7 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       setMemories(memoriesArray);
       setError(null);
       
-      // Refresh stats after search to update query times (with small delay for server processing)
+      // Refresh stats after search
       await new Promise(resolve => setTimeout(resolve, 100));
       await loadStats();
     } catch (searchError) {
@@ -221,9 +285,14 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
         throw new Error('Memory API not available');
       }
 
-      console.log('Recalling with query:', queryToUse.trim());
-      const response = await window.electronAPI.memory.recall_memory(queryToUse.trim(), 5);
-      console.log('Recall response:', response);
+      console.log('🔍 Recalling with query:', queryToUse.trim());
+      
+      // Measure the recall operation time
+      const response = await measureQueryTime(async () => {
+        return window.electronAPI.memory.recall_memory(queryToUse.trim(), 5);
+      }, 'Recall Memory');
+      
+     console.log('Recall response:', response);
 
       const memoriesArray = response.memories || [];
       setMemories(memoriesArray);
@@ -504,6 +573,19 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
                 >
                   Dismiss
                 </button>
+              </div>
+            </div>
+          )}
+          {/* NEW: Query timing info display */}
+          {recentQueryTimes.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded-md mb-4 flex items-start gap-2">
+              <Clock className="w-5 h-5 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium">Query Timing Info</p>
+                <p className="text-sm">
+                  Last query: {lastQueryTime.toFixed(1)}ms | 
+                  Average of {recentQueryTimes.length} recent queries: {stats.avgQueryTime.toFixed(1)}ms
+                </p>
               </div>
             </div>
           )}
@@ -874,7 +956,7 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold">
+            <div className="text-2xl f font-bold flex items-center gap-2">
               {statsLoading ? (
                 <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
               ) : (
@@ -902,10 +984,18 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
               {statsLoading ? (
                 <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
               ) : (
-                stats.avgQueryTime
+                <span className={stats.avgQueryTime > 0 ? 'text-green-600' : 'text-gray-400'}>
+                {stats.avgQueryTime > 0 ? `${stats.avgQueryTime.toFixed(1)}ms` : '0ms'}
+              </span>
               )}
             </div>
-            <div className="text-sm text-gray-500">Avg Query (ms)</div>
+            <div className="text-sm text-gray-500">              Avg Query (ms)
+              {recentQueryTimes.length > 0 && (
+                <span className="block text-xs text-blue-600">
+                  {recentQueryTimes.length} measurements
+                </span>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
