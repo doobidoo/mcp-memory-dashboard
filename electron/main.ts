@@ -7,6 +7,8 @@ import { promisify } from 'util';
 import DirectChromaHandler from './directChroma';
 
 // Load environment variables from .env file
+console.log('🔧 Starting main process...');
+
 const envPath = path.join(process.cwd(), '.env');
 console.log('Loading environment variables from:', envPath);
 const result = dotenv.config({ path: envPath });
@@ -23,6 +25,8 @@ if (result.error) {
     MCP_MEMORY_BACKUPS_PATH: process.env.MCP_MEMORY_BACKUPS_PATH
   });
 }
+
+console.log('🎯 App initialization complete, waiting for ready event...');
 
 // Initialize Direct ChromaDB Handler (GitHub Issue #11 Solution)
 let directChromaHandler: DirectChromaHandler | null = null;
@@ -45,6 +49,55 @@ if (useDirectAccess) {
   } else {
     console.warn('⚠️  Direct ChromaDB access requested but paths not configured');
   }
+}
+
+console.log('🔧 Setting up app event handlers...');
+
+// Add error handlers to debug what's causing the quit
+app.on('will-quit', (event) => {
+  console.log('⚠️ App will-quit event triggered');
+});
+
+console.log('🔧 Setting up window-all-closed handler...');
+
+// Check if app is already ready
+if (app.isReady()) {
+  console.log('🎉 App was already ready!');
+} else {
+  console.log('⏳ App not ready yet, waiting...');
+}
+
+// Add more comprehensive error handling
+process.on('uncaughtException', (error) => {
+  console.error('🚨 Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🚨 Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+app.on('ready', () => {
+  console.log('🎊 App ready event fired!');
+});
+
+// Single instance lock check
+console.log('🔒 Requesting single instance lock...');
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  console.log('❌ Failed to get single instance lock, quitting...');
+  app.quit();
+} else {
+  console.log('✅ Got single instance lock');
+  
+  app.on('second-instance', () => {
+    console.log('🔄 Second instance detected');
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
 }
 
 // Import types from Electron
@@ -332,7 +385,7 @@ ipcMain.handle('mcp:use-tool', async (_event: IpcMainInvokeEvent, request: MCPTo
 });
 
 app.whenReady().then(() => {
-  console.log('App is ready, creating window...');
+  console.log('🎉 App is ready, creating window...');
   
   // Initialize Direct ChromaDB Handler IPC if enabled
   if (directChromaHandler) {
@@ -340,7 +393,11 @@ app.whenReady().then(() => {
     console.log('✅ Direct ChromaDB IPC handlers initialized');
   }
   
+  console.log('📱 Calling createWindow()...');
   createWindow();
+  console.log('✅ createWindow() completed');
+}).catch(error => {
+  console.error('❌ Error in app.whenReady():', error);
 });
 
 app.on('window-all-closed', async () => {
@@ -362,21 +419,30 @@ app.on('window-all-closed', async () => {
   }
 });
 
+let isQuitting = false;
+
 app.on('before-quit', async (event) => {
   console.log('App is about to quit, cleaning up resources...');
   
+  // Prevent infinite cleanup loop
+  if (isQuitting) {
+    console.log('🔄 Already quitting, allowing immediate exit');
+    return;
+  }
+  
   // Cleanup DirectChromaHandler resources before quitting
   if (directChromaHandler) {
-    event.preventDefault(); // Prevent immediate quit
+    event.preventDefault(); // Prevent immediate quit only once
+    isQuitting = true;
     
     console.log('🧹 Performing cleanup before quit...');
     try {
       await directChromaHandler.cleanup();
       console.log('✅ Cleanup completed, quitting app');
-      app.quit();
     } catch (error) {
       console.error('❌ Error during cleanup:', error);
-      app.quit(); // Quit anyway
+    } finally {
+      app.quit(); // Always quit after cleanup attempt
     }
   }
 });
@@ -388,16 +454,3 @@ app.on('activate', () => {
   }
 });
 
-const gotTheLock = app.requestSingleInstanceLock();
-
-if (!gotTheLock) {
-  app.quit();
-} else {
-  app.on('second-instance', () => {
-    const win = BrowserWindow.getAllWindows()[0];
-    if (win) {
-      if (win.isMinimized()) win.restore();
-      win.focus();
-    }
-  });
-}

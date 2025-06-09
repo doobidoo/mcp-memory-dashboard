@@ -221,7 +221,7 @@ export class DockerChromaManager {
         '--name', this.config.containerName,
         '-p', `${availablePort}:8000`,
         '-v', `${this.config.chromaPath}:/chroma/chroma`,
-        '--health-cmd', 'curl -f http://localhost:8000/api/v1/heartbeat || exit 1',
+        '--health-cmd', 'sh -c "curl -f http://localhost:8000/api/v1/heartbeat || exit 1"',
         '--health-interval', '10s',
         '--health-timeout', '5s',
         '--health-retries', '3',
@@ -350,8 +350,14 @@ export class DockerChromaManager {
     }
     
     try {
-      await execAsync(`docker stop ${this.config.containerName}`);
-      console.log('✅ Container stopped successfully');
+      // Check if container exists before trying to stop it
+      const status = await this.getContainerStatus();
+      if (status.running) {
+        await execAsync(`docker stop ${this.config.containerName}`);
+        console.log('✅ Container stopped successfully');
+      } else {
+        console.log('ℹ️ Container was not running');
+      }
     } catch (error) {
       console.log('⚠️ Error stopping container:', error instanceof Error ? error.message : 'Unknown error');
     }

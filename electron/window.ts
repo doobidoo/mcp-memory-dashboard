@@ -3,13 +3,14 @@ import path from 'path';
 import { waitForFile, checkServer } from './utils';
 
 export function createWindow() {
-  console.log('Creating window...');
+  console.log('🔧 Starting createWindow()...');
 
   const preloadPath = process.env.NODE_ENV === 'development'
     ? path.join(process.cwd(), 'dist/electron/preload.js')
     : path.join(__dirname, 'preload.js');
 
-  console.log('Preload script path:', preloadPath);
+  console.log('📄 Preload script path:', preloadPath);
+  console.log('📂 Preload file exists:', require('fs').existsSync(preloadPath));
 
   const win = new BrowserWindow({
     width: 1200,
@@ -30,6 +31,8 @@ export function createWindow() {
       ]
     }
   });
+
+  console.log('🪟 BrowserWindow created successfully');
 
   console.log('Environment variables:', {
     VITE_MEMORY_SERVICE_PATH: process.env.VITE_MEMORY_SERVICE_PATH,
