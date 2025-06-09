@@ -343,10 +343,41 @@ app.whenReady().then(() => {
   createWindow();
 });
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
   console.log('All windows closed');
+  
+  // Cleanup DirectChromaHandler resources (Docker containers, etc.)
+  if (directChromaHandler) {
+    console.log('🧹 Cleaning up Direct ChromaDB Handler...');
+    try {
+      await directChromaHandler.cleanup();
+      console.log('✅ Direct ChromaDB cleanup completed');
+    } catch (error) {
+      console.error('❌ Error during DirectChromaHandler cleanup:', error);
+    }
+  }
+  
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+app.on('before-quit', async (event) => {
+  console.log('App is about to quit, cleaning up resources...');
+  
+  // Cleanup DirectChromaHandler resources before quitting
+  if (directChromaHandler) {
+    event.preventDefault(); // Prevent immediate quit
+    
+    console.log('🧹 Performing cleanup before quit...');
+    try {
+      await directChromaHandler.cleanup();
+      console.log('✅ Cleanup completed, quitting app');
+      app.quit();
+    } catch (error) {
+      console.error('❌ Error during cleanup:', error);
+      app.quit(); // Quit anyway
+    }
   }
 });
 
