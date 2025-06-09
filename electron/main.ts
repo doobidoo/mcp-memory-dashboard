@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import { createWindow } from './window';
 import { promisify } from 'util';
+import DirectChromaHandler from './directChroma';
 
 // Load environment variables from .env file
 const envPath = path.join(process.cwd(), '.env');
@@ -21,6 +22,29 @@ if (result.error) {
     MCP_MEMORY_CHROMA_PATH: process.env.MCP_MEMORY_CHROMA_PATH,
     MCP_MEMORY_BACKUPS_PATH: process.env.MCP_MEMORY_BACKUPS_PATH
   });
+}
+
+// Initialize Direct ChromaDB Handler (GitHub Issue #11 Solution)
+let directChromaHandler: DirectChromaHandler | null = null;
+
+// Check if direct database access is enabled
+const useDirectAccess = process.env.VITE_USE_DIRECT_CHROMA_ACCESS === 'true';
+console.log('Direct ChromaDB access enabled:', useDirectAccess);
+
+if (useDirectAccess) {
+  const chromaPath = process.env.VITE_MEMORY_CHROMA_PATH || process.env.MCP_MEMORY_CHROMA_PATH;
+  const backupsPath = process.env.VITE_MEMORY_BACKUPS_PATH || process.env.MCP_MEMORY_BACKUPS_PATH;
+  
+  if (chromaPath && backupsPath) {
+    directChromaHandler = new DirectChromaHandler({
+      chromaPath,
+      backupsPath
+    });
+    
+    console.log('✅ Initialized Direct ChromaDB Handler - Eliminates MCP service duplication');
+  } else {
+    console.warn('⚠️  Direct ChromaDB access requested but paths not configured');
+  }
 }
 
 // Import types from Electron
@@ -80,7 +104,48 @@ ipcMain.handle('fs:exists', async (_event: IpcMainInvokeEvent, { path }: { path:
 // Handle IPC messages
 ipcMain.handle('mcp:use-tool', async (_event: IpcMainInvokeEvent, request: MCPToolRequest): Promise<unknown> => {
   const { server_name, tool_name, arguments: args } = request;
-  console.log(`Forwarding MCP tool request: ${server_name}/${tool_name}`, { args, cwd: process.cwd() });
+  console.log(`Handling MCP tool request: ${server_name}/${tool_name}`, { args, useDirectAccess });
+  
+  // GitHub Issue #11 Solution: Use direct ChromaDB access if enabled
+  if (useDirectAccess && directChromaHandler && server_name === 'memory') {
+    console.log('🚀 Using Direct ChromaDB Access - No MCP service spawning');
+    
+    try {
+      // Map MCP tool names to direct handler methods
+      switch (tool_name) {
+        case 'store_memory':
+          return await directChromaHandler.handleDirectRequest('direct-chroma:store', args);
+        case 'dashboard_retrieve_memory':
+        case 'retrieve_memory':
+          return await directChromaHandler.handleDirectRequest('direct-chroma:retrieve', args);
+        case 'dashboard_search_by_tag':
+        case 'search_by_tag':
+          return await directChromaHandler.handleDirectRequest('direct-chroma:search-by-tag', args);
+        case 'delete_by_tag':
+          return await directChromaHandler.handleDirectRequest('direct-chroma:delete-by-tag', args);
+        case 'dashboard_get_stats':
+        case 'get_stats':
+          return await directChromaHandler.handleDirectRequest('direct-chroma:get-stats', args);
+        case 'dashboard_check_health':
+        case 'check_database_health':
+          return await directChromaHandler.handleDirectRequest('direct-chroma:check-health', args);
+        case 'dashboard_optimize_db':
+        case 'optimize_db':
+          return await directChromaHandler.handleDirectRequest('direct-chroma:optimize', args);
+        case 'dashboard_create_backup':
+        case 'create_backup':
+          return await directChromaHandler.handleDirectRequest('direct-chroma:backup', args);
+        default:
+          throw new Error(`Unsupported tool: ${tool_name}`);
+      }
+    } catch (error) {
+      console.error('Direct ChromaDB access error, falling back to MCP:', error);
+      // Fall through to MCP approach below
+    }
+  }
+  
+  // Fallback to original MCP spawning approach (GitHub Issue #11 - Option 3)
+  console.log('⚠️  Using MCP service spawning approach');
   
   try {
     const configPath = process.env.VITE_CLAUDE_CONFIG_PATH;
@@ -268,6 +333,13 @@ ipcMain.handle('mcp:use-tool', async (_event: IpcMainInvokeEvent, request: MCPTo
 
 app.whenReady().then(() => {
   console.log('App is ready, creating window...');
+  
+  // Initialize Direct ChromaDB Handler IPC if enabled
+  if (directChromaHandler) {
+    directChromaHandler.setupIpcHandlers();
+    console.log('✅ Direct ChromaDB IPC handlers initialized');
+  }
+  
   createWindow();
 });
 

@@ -20,6 +20,7 @@
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@radix-ui/react-alert-dialog": "^1.0.5",
     "@radix-ui/react-slot": "^1.0.2",
+    "chromadb": "^1.9.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "dotenv": "^16.4.7",
