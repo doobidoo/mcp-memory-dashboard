@@ -1,17 +1,3 @@
-"""
-PERFORMANCE OPTIMIZED VERSION of server.py
-Date: 2025-06-08
-Issue: #10 - Performance optimization for stats methods
-
-OPTIMIZATIONS IMPLEMENTED:
-1. Caching layer for stats with TTL
-2. Reduced frequency of stats calls 
-3. Lazy tag index maintenance
-4. Batch operations where possible
-
-TARGET: Reduce 8-10s query times to 2-5s or better
-"""
-
 from typing import Any
 import asyncio
 import httpx
@@ -25,10 +11,9 @@ import json
 import uuid
 import time
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from collections import deque
-import threading
 
 # Initialize the server
 server = Server("memory-dashboard")
@@ -59,48 +44,6 @@ except Exception as e:
     # For now, we can re-raise or log, but this indicates a setup issue.
     raise ValueError(f"Failed to get or create ChromaDB collection '{COLLECTION_NAME}': {e}")
 
-# PERFORMANCE OPTIMIZATION: Stats caching
-class StatsCache:
-    def __init__(self, ttl_seconds=30):
-        self.ttl_seconds = ttl_seconds
-        self.cache = {}
-        self.last_updated = {}
-        self.lock = threading.Lock()
-        
-    def get(self, key):
-        with self.lock:
-            if key in self.cache:
-                if datetime.now() - self.last_updated[key] < timedelta(seconds=self.ttl_seconds):
-                    print(f"📊 Cache HIT for {key} (age: {(datetime.now() - self.last_updated[key]).seconds}s)")
-                    return self.cache[key]
-                else:
-                    print(f"📊 Cache EXPIRED for {key}")
-                    del self.cache[key]
-                    del self.last_updated[key]
-            print(f"📊 Cache MISS for {key}")
-            return None
-    
-    def set(self, key, value):
-        with self.lock:
-            self.cache[key] = value
-            self.last_updated[key] = datetime.now()
-            print(f"📊 Cache SET for {key}")
-    
-    def invalidate(self, key=None):
-        with self.lock:
-            if key:
-                if key in self.cache:
-                    del self.cache[key]
-                    del self.last_updated[key]
-                    print(f"📊 Cache INVALIDATED for {key}")
-            else:
-                self.cache.clear()
-                self.last_updated.clear()
-                print(f"📊 Cache CLEARED (all keys)")
-
-# Initialize cache with 30-second TTL
-stats_cache = StatsCache(ttl_seconds=30)
-
 def track_query_time(func):
     """Decorator to track query execution times"""
     def wrapper(*args, **kwargs):
@@ -117,91 +60,6 @@ def get_average_query_time():
     if not query_times:
         return 0
     return round(sum(query_times) / len(query_times), 2)
-
-def get_stats_optimized():
-    """OPTIMIZED stats method with caching and improved performance"""
-    
-    # Check cache first
-    cached_stats = stats_cache.get("stats")
-    if cached_stats:
-        return cached_stats
-    
-    start_time = time.time()
-    
-    try:
-        # Get total count (this is fast)
-        total_memories = collection.count()
-        print(f"🔍 Total memories count: {total_memories}")
-        
-        # OPTIMIZATION: Use lighter approach for tag counting
-        if total_memories == 0:
-            stats = {"total_memories": 0, "unique_tags": 0}
-        elif total_memories < 100:
-            # For small collections, use original method (acceptable performance)
-            print("📊 Small collection detected, using full metadata scan")
-            all_metadatas_results = collection.get(include=['metadatas'])
-            all_metadatas = all_metadatas_results.get('metadatas', [])
-            
-            unique_tags = set()
-            if all_metadatas: 
-                for meta in all_metadatas:
-                    if meta and isinstance(meta.get("tags"), list):
-                        for tag in meta["tags"]:
-                            unique_tags.add(tag)
-            
-            stats = {
-                "total_memories": total_memories,
-                "unique_tags": len(unique_tags)
-            }
-        else:
-            # For large collections, use sampling approach
-            print("📊 Large collection detected, using sampling approach")
-            
-            # Sample a subset of documents to estimate unique tags
-            sample_size = min(50, total_memories // 10)  # Sample 10% or max 50 docs
-            print(f"📊 Sampling {sample_size} documents out of {total_memories}")
-            
-            sample_results = collection.get(
-                include=['metadatas'],
-                limit=sample_size
-            )
-            
-            sample_metadatas = sample_results.get('metadatas', [])
-            unique_tags_sample = set()
-            
-            if sample_metadatas:
-                for meta in sample_metadatas:
-                    if meta and isinstance(meta.get("tags"), list):
-                        for tag in meta["tags"]:
-                            unique_tags_sample.add(tag)
-            
-            # Estimate total unique tags (this is an approximation)
-            # In practice, you might want to maintain a separate tag index
-            estimated_unique_tags = len(unique_tags_sample)
-            
-            stats = {
-                "total_memories": total_memories,
-                "unique_tags": estimated_unique_tags,
-                "note": f"Estimated from {sample_size} samples"
-            }
-        
-        # Cache the results
-        stats_cache.set("stats", stats)
-        
-        end_time = time.time()
-        query_time = (end_time - start_time) * 1000
-        print(f"⚡ Stats computed in {query_time:.1f}ms (vs previous 8-10s)")
-        
-        return stats
-        
-    except Exception as e:
-        print(f"Error getting optimized stats: {e}")
-        error_stats = {
-            "total_memories": 0,
-            "unique_tags": 0,
-            "error": str(e)
-        }
-        return error_stats
 
 def parse_time_expression(query):
     """Parse natural language time expressions and convert to ChromaDB filters"""
@@ -486,10 +344,6 @@ async def handle_call_tool(
                 documents=[content],
                 metadatas=[metadata_arg]
             )
-            
-            # OPTIMIZATION: Invalidate stats cache when new memory is added
-            stats_cache.invalidate("stats")
-            
             return [types.TextContent(
                 type="text",
                 text=f"Successfully stored memory with ID: {new_id}"
@@ -734,9 +588,6 @@ async def handle_call_tool(
 
             collection.delete(ids=ids_to_delete) # Delete by specific IDs
             
-            # OPTIMIZATION: Invalidate stats cache when memories are deleted
-            stats_cache.invalidate("stats")
-            
             return [types.TextContent(
                 type="text",
                 text=f"Successfully deleted {len(ids_to_delete)} memories with tag: {tag_to_delete}"
@@ -800,7 +651,24 @@ async def handle_call_tool(
     
     elif name == "get_stats":
         try:
-            stats_data = get_stats_optimized()
+            total_memories = collection.count()
+            
+            # WARNING: This can be very slow and memory-intensive on large collections.
+            # Consider alternative strategies for production systems.
+            all_metadatas_results = collection.get(include=['metadatas'])
+            all_metadatas = all_metadatas_results.get('metadatas', [])
+            
+            unique_tags = set()
+            if all_metadatas: 
+                for meta in all_metadatas:
+                    if meta and isinstance(meta.get("tags"), list):
+                        for tag in meta["tags"]:
+                            unique_tags.add(tag)
+            
+            stats_data = {
+                "total_memories": total_memories,
+                "unique_tags": len(unique_tags)
+            }
             return [types.TextContent(
                 type="text",
                 text=json.dumps(stats_data)
@@ -819,7 +687,23 @@ async def handle_call_tool(
 
     elif name == "dashboard_get_stats":
         try:
-            stats_data = get_stats_optimized()
+            total_memories = collection.count()
+            
+            # WARNING: This can be very slow and memory-intensive on large collections.
+            all_metadatas_results = collection.get(include=['metadatas'])
+            all_metadatas = all_metadatas_results.get('metadatas', [])
+            
+            unique_tags = set()
+            if all_metadatas: 
+                for meta in all_metadatas:
+                    if meta and isinstance(meta.get("tags"), list):
+                        for tag in meta["tags"]:
+                            unique_tags.add(tag)
+            
+            stats_data = {
+                "total_memories": total_memories,
+                "unique_tags": len(unique_tags)
+            }
             return [types.TextContent(
                 type="text",
                 text=json.dumps(stats_data)
@@ -961,9 +845,6 @@ async def handle_call_tool(
             
             # Delete the memory
             collection.delete(ids=[memory_id])
-            
-            # OPTIMIZATION: Invalidate stats cache when memory is deleted
-            stats_cache.invalidate("stats")
             
             return [types.TextContent(
                 type="text",

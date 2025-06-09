@@ -7,4 +7,3 @@ node_modules
 dist/assets/*.*
 dist/electron/preload.js
 dist/index.html
-.env

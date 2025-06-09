@@ -68,6 +68,8 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
   const [recentQueryTimes, setRecentQueryTimes] = useState<number[]>([]);
   const [lastQueryTime, setLastQueryTime] = useState<number>(0);
   const [isTimingQuery, setIsTimingQuery] = useState(false);
+  // NEW: Stats cache tracking
+  const [lastStatsUpdate, setLastStatsUpdate] = useState<Date | null>(null);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -90,7 +92,7 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
         console.error('Failed to initialize app:', error);
         setInitializationStatus('Failed to initialize - retrying...');
         
-        // Retry after a delay
+        // Retry after a dela
         setTimeout(() => {
           initializeApp();
         }, 2000);
@@ -186,6 +188,9 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
 
       setError(null);
       setInitializationStatus('Statistics loaded successfully!');
+      
+      // Track when stats were last updated
+      setLastStatsUpdate(new Date());
     } catch (err) {
       console.error('Failed to load statistics:', err);
       setError('Failed to load statistics: ' + (err instanceof Error ? err.message : String(err)));
@@ -260,9 +265,7 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       setMemories(memoriesArray);
       setError(null);
       
-      // Refresh stats after search
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await loadStats();
+      // OPTIMIZATION: Don't refresh stats after read operations (search)
     } catch (searchError) {
       const err = searchError instanceof Error ? searchError : new Error(String(searchError));
       console.error('Search failed:', err);
@@ -303,9 +306,7 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
         setRecallQuery(query);
       }
       
-      // Refresh stats after recall to update query times (with small delay for server processing)
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await loadStats();
+      // OPTIMIZATION: Don't refresh stats after read operations (recall)
     } catch (recallError) {
       const err = recallError instanceof Error ? recallError : new Error(String(recallError));
       console.error('Recall failed:', err);
@@ -526,6 +527,13 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
               >
                 <Settings className={`w-5 h-5 ${statsLoading ? 'animate-spin' : ''}`} />
               </button>
+              {/* Cache Status Indicator */}
+              {lastStatsUpdate && (
+                <div className="flex items-center text-xs text-gray-500 px-2">
+                  <Clock className="w-4 h-4 mr-1" />
+                  Stats: {Math.round((Date.now() - lastStatsUpdate.getTime()) / 1000)}s ago
+                </div>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -585,6 +593,9 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
                 <p className="text-sm">
                   Last query: {lastQueryTime.toFixed(1)}ms | 
                   Average of {recentQueryTimes.length} recent queries: {stats.avgQueryTime.toFixed(1)}ms
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  ⚡ Optimized: Stats cached for 30s, reduced refresh frequency
                 </p>
               </div>
             </div>
