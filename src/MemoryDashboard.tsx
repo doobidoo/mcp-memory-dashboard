@@ -1,3 +1,5 @@
+// Only call loadStats() after operations that change memory or tags.
+// avgQueryTime is updated after every query via measureQueryTime.
 import React, { useState, useEffect } from 'react';
 import {
   DatabaseHealth,
@@ -81,8 +83,8 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       
       try {
         setInitializationStatus('Loading database statistics...');
-        await new Promise(resolve => setTimeout(resolve, 100));
-        await loadStats();
+        
+        loadStats();
         setInitializationStatus('Memory Service ready!');
         
         // Show ready status briefly before hiding initialization
@@ -228,8 +230,8 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       setError(null);
       
       // Refresh stats after storing
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await loadStats();
+      
+      loadStats();
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       setError('Failed to store memory: ' + err.message);
@@ -333,8 +335,8 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       if (result.status === 'success') {
         // Remove the deleted memory from the current view
         setMemories(memories.filter(memory => memory.id !== memoryId));
-        await new Promise(resolve => setTimeout(resolve, 100));
-        await loadStats(); // Refresh stats
+        
+        loadStats(); // Refresh stats
         setError(null);
       } else {
         setError(result.message || 'Failed to delete memory');
@@ -360,8 +362,8 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
       if (result.status === 'not_implemented') {
         setError('Database optimization feature is not yet implemented');
       } else {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        await loadStats();
+        
+        // loadStats();
         setError(null);
       }
     } catch (err) {
@@ -415,8 +417,8 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
 
       // Use the enhanced delete_by_tag method that supports both single and multiple tags
       await window.electronAPI.memory.delete_by_tag(validTags.length === 1 ? validTags[0] : validTags);
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await loadStats();
+      
+      loadStats();
       setError(null);
       setSearchQuery('');
       setSelectedTags([]);
