@@ -5,6 +5,89 @@ All notable changes to the MCP Memory Dashboard project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2025-06-09 - 🔧 **PATCH: Docker & Startup Reliability Improvements**
+
+### 🛠️ **Bug Fixes**
+
+#### **Docker Health Check Resolution**
+- **FIXED**: Docker command formatting error causing container startup failures
+- **FIXED**: "invalid reference format" and "too many arguments" errors
+- **IMPROVED**: Health check command now properly quoted: `sh -c "curl -f http://localhost:8000/api/v1/heartbeat || exit 1"`
+- **RESULT**: Docker containers now start successfully with working health checks
+
+#### **Application Startup Reliability**
+- **FIXED**: Single instance lock issues causing immediate app quit
+- **IMPROVED**: Comprehensive startup logging for better debugging
+- **IMPROVED**: Enhanced error handling for uncaught exceptions and unhandled rejections
+- **IMPROVED**: Better app lifecycle event tracking and management
+
+#### **Shutdown Process Hardening**
+- **FIXED**: Potential infinite cleanup loops during app shutdown
+- **IMPROVED**: Defensive container status checking before operations
+- **IMPROVED**: Enhanced resource cleanup with proper error handling
+- **IMPROVED**: Graceful shutdown sequence with isQuitting flag protection
+
+### 🧪 **Development Tools**
+
+#### **Debug Infrastructure Added**
+- **NEW**: `debug-startup.sh` - Systematic startup troubleshooting script
+- **NEW**: `test-docker-startup.sh` - Docker integration testing script
+- **IMPROVED**: Production-level debugging capabilities
+- **IMPROVED**: Comprehensive logging throughout application lifecycle
+
+### 📊 **Reliability Improvements**
+
+#### **Error Handling**
+- **IMPROVED**: Better error messages and user guidance
+- **IMPROVED**: Graceful fallback from Docker to MCP mode maintained
+- **IMPROVED**: Defensive programming practices throughout codebase
+- **IMPROVED**: Resource cleanup and container lifecycle management
+
+#### **User Experience**
+- **MAINTAINED**: 100% backward compatibility with existing setups
+- **MAINTAINED**: Same high performance (2-3x faster in Docker mode)
+- **MAINTAINED**: Automatic fallback to stable MCP mode if Docker issues occur
+- **IMPROVED**: More reliable startup and shutdown experience
+
+### 🔄 **Migration Notes**
+
+#### **For Existing Users**
+- **NO ACTION REQUIRED**: All improvements are automatic
+- **BENEFIT**: More reliable Docker mode operation
+- **BENEFIT**: Better debugging capabilities if issues occur
+- **MAINTAINED**: All existing functionality and performance benefits
+
+#### **For Developers**
+- **NEW**: Debug scripts available for troubleshooting
+- **IMPROVED**: Better error messages and logging
+- **IMPROVED**: More robust container lifecycle management
+- **IMPROVED**: Enhanced development debugging capabilities
+
+### 📋 **Technical Details**
+
+#### **Docker Command Fix**
+```bash
+# Before (broken)
+--health-cmd 'curl -f http://localhost:8000/api/v1/heartbeat || exit 1'
+
+# After (working)
+--health-cmd 'sh -c "curl -f http://localhost:8000/api/v1/heartbeat || exit 1"'
+```
+
+#### **Startup Improvements**
+- Single instance lock verification and debugging
+- Comprehensive app lifecycle event logging
+- Enhanced error handling and recovery
+- Better resource initialization tracking
+
+#### **Shutdown Improvements**
+- Defensive container status checking
+- Infinite loop prevention with isQuitting flag
+- Enhanced cleanup error handling
+- Graceful resource deallocation
+
+---
+
 ## [1.3.0] - 2025-06-09 - 🚀 **MAJOR: Docker ChromaDB Integration**
 
 ### 🎯 **Major Features Added**
