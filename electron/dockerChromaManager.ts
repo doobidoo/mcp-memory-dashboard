@@ -135,6 +135,37 @@ export class DockerChromaManager {
   }
 
   /**
+   * Check if container exists and is responding
+   */
+  async isContainerHealthy(): Promise<boolean> {
+    try {
+      // Check if container is running
+      const { stdout } = await execAsync(`docker ps --filter "name=${this.config.containerName}" --format "{{.Status}}"`);
+      if (!stdout.trim().includes('Up')) {
+        return false;
+      }
+
+      // Test if ChromaDB is responding
+      const fetch = await import('node-fetch');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
+      try {
+        const response = await fetch.default(`http://localhost:${this.config.port}/api/v2/heartbeat`, { 
+          signal: controller.signal 
+        });
+        clearTimeout(timeoutId);
+        return response.ok;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        return false;
+      }
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
    * Stop and remove existing container if it exists
    */
   async cleanupExistingContainer(): Promise<void> {
@@ -196,6 +227,17 @@ export class DockerChromaManager {
     try {
       console.log('🚀 Starting ChromaDB Docker container...');
       
+      // First check if container already exists and is healthy
+      if (await this.isContainerHealthy()) {
+        console.log('✅ Existing container is healthy, using it');
+        return {
+          running: true,
+          healthy: true,
+          port: this.config.port,
+          containerId: this.config.containerName
+        };
+      }
+      
       // Validate prerequisites
       if (!await this.isDockerAvailable()) {
         throw new Error('Docker is not available. Please install Docker Desktop and ensure it is running.');
@@ -221,10 +263,6 @@ export class DockerChromaManager {
         '--name', this.config.containerName,
         '-p', `${availablePort}:8000`,
         '-v', `${this.config.chromaPath}:/chroma/chroma`,
-        '--health-cmd', 'sh -c "curl -f http://localhost:8000/api/v1/heartbeat || exit 1"',
-        '--health-interval', '10s',
-        '--health-timeout', '5s',
-        '--health-retries', '3',
         'chromadb/chroma'
       ];
       

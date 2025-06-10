@@ -173,6 +173,22 @@ export class DirectChromaHandler {
         path: apiUrl
       });
       
+      // Test connection with v2 API
+      console.log('🧪 Testing ChromaDB connection...');
+      try {
+        // Use a simple heartbeat test
+        const fetch = await import('node-fetch');
+        const response = await fetch.default(`${apiUrl}/api/v2/heartbeat`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const heartbeat = await response.json();
+        console.log('✅ ChromaDB connection successful:', heartbeat);
+      } catch (error) {
+        console.error('❌ ChromaDB connection test failed:', error);
+        throw new Error('Failed to connect to ChromaDB container');
+      }
+      
       // Get or create collection
       try {
         this.collection = await this.client.getCollection({
