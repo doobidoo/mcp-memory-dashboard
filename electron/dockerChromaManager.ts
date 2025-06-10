@@ -228,10 +228,16 @@ export class DockerChromaManager {
         'chromadb/chroma'
       ];
       
-      console.log('🐳 Docker command:', `docker ${dockerCommand.join(' ')}`);
-      
       // Start container
-      const { stdout: containerId } = await execAsync(`docker ${dockerCommand.join(' ')}`);
+      const dockerCommandStr = dockerCommand.map(arg => {
+        if (arg.includes(' ') && !arg.startsWith('"')) {
+          // Escape inner quotes and wrap in quotes
+          return `"${arg.replace(/"/g, '\\"')}"`;
+        }
+        return arg;
+      }).join(' ');
+      console.log('🐳 Docker command:', `docker ${dockerCommandStr}`);
+      const { stdout: containerId } = await execAsync(`docker ${dockerCommandStr}`);
       
       console.log(`✅ Container started with ID: ${containerId.trim()}`);
       
