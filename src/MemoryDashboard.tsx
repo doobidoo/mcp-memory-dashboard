@@ -181,9 +181,9 @@ const MemoryDashboard: React.FC<MemoryDashboardProps> = () => {
 
       // Update service status based on health
       setServiceStatus(
-        healthData.health >= 90
+        healthInfo.health >= 90
           ? 'healthy'
-          : healthData.health > 0
+          : healthInfo.health > 0
           ? 'unhealthy'
           : 'unknown'
       );
