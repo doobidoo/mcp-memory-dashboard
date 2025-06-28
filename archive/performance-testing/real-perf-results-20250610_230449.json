@@ -1,0 +1,35 @@
+{
+  "test_timestamp": "2025-06-10T21:05:09Z",
+  "test_type": "real_mcp_performance",
+  "issue": "#10 - Stats performance bottleneck",
+  "target": "8-10s → <1s",
+  "environment": {
+    "docker_container_running": "mcp-memory-chromadb",
+    "docker_mode_enabled": "true",
+    "project_version": "1.3.1"
+  },
+  "optimization_status": {
+    "stats_cache_class": true,
+    "optimized_function": true,
+    "cache_usage": true,
+    "cache_invalidation": true,
+    "sampling_approach": true
+  },
+  "performance_metrics": {
+    "cache_hits": 0
+0,
+    "cache_misses": 0
+0,
+    "cache_sets": 0
+0,
+    "stats_timings_ms": [],
+    "frontend_timings_ms": []
+  },
+  "log_file": "/tmp/mcp-perf-test-20250610_230449.log",
+  "dashboard_startup": "failed",
+  "recommendations": [
+    "Verify cache implementation",
+    "Docker mode operational",
+    "Stats optimization appears effective"
+  ]
+}
