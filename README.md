@@ -1,3 +1,50 @@
+# 🚨 DEPRECATED - This Repository is No Longer Needed! 🚨
+
+> **⚠️ IMPORTANT NOTICE: This standalone dashboard is now OBSOLETE!**
+> 
+> The [MCP Memory Service](https://github.com/doobidoo/mcp-memory-service) now includes an **embedded dashboard** with all the features of this standalone version and more!
+> 
+> ## 🎉 What's New?
+> 
+> The main MCP Memory Service now provides:
+> - ✅ **Built-in Web Dashboard** - No separate installation needed
+> - ✅ **All Original Features** - Store, search, recall, and manage memories
+> - ✅ **Better Integration** - Direct access to the memory service
+> - ✅ **Simplified Setup** - One installation, everything included
+> - ✅ **Active Development** - New features added regularly
+> 
+> ## 🔄 How to Migrate
+> 
+> 1. **Update your MCP Memory Service**:
+>    ```bash
+>    git pull origin main
+>    python install.py
+>    ```
+> 
+> 2. **Access the embedded dashboard**:
+>    - Start the memory service with HTTP mode
+>    - Navigate to `http://localhost:8000` in your browser
+>    - Enjoy all the features without this separate app!
+> 
+> ## 📦 Why Was This Deprecated?
+> 
+> To provide a better user experience, we've integrated the dashboard directly into the memory service. This means:
+> - Fewer dependencies to manage
+> - Easier installation and updates
+> - Better performance and reliability
+> - Single source of truth for all features
+> 
+> ## 🔗 Get Started
+> 
+> Visit the main repository for installation and usage instructions:
+> 
+> **👉 [MCP Memory Service](https://github.com/doobidoo/mcp-memory-service)**
+> 
+> ---
+> 
+> *The original README content is preserved below for historical reference.*
+> 
+> ---
 # MCP Memory Dashboard <img width="60" alt="grafik" src="https://github.com/user-attachments/assets/eab1f341-ca54-445c-905e-273cd9e89555" />
 
 A professional desktop application for managing and interacting with the **[MCP Memory Service](https://github.com/doobidoo/mcp-memory-service)** - a semantic memory system built on the Model Context Protocol (MCP).
